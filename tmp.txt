@@ -1,0 +1,204 @@
+0001:  
+0002:  function Get-RowByNumber {
+0003:      Param([int]$RowNumber)
+0004:      [System.Threading.Monitor]::Enter($global:ExcelLock)
+0005:      try {
+0006:          $global:UsedRange = $global:Worksheet.UsedRange
+0007:          $vals = $global:UsedRange.Value2
+0008:          $colCount = $vals.GetLength(1)
+0009:          $row = [ordered]@{ rowNumber = $RowNumber }
+0010:          for ($c=1; $c -le $colCount; $c++) {
+0011:              $h = [string]$global:Headers[$c-1]
+0012:              if (-not [string]::IsNullOrEmpty($h)) {
+0013:                  $row[$h] = $vals.GetValue($RowNumber,$c)
+0014:              }
+0015:          }
+0016:          return [pscustomobject]$row
+0017:      }
+0018:      finally { [System.Threading.Monitor]::Exit($global:ExcelLock) }
+0019:  }
+0020:  
+0021:  function Ensure-CommentsColumn {
+0022:      [System.Threading.Monitor]::Enter($global:ExcelLock)
+0023:      try {
+0024:          $global:UsedRange = $global:Worksheet.UsedRange
+0025:          $vals = $global:UsedRange.Value2
+0026:          $colCount = $vals.GetLength(1)
+0027:          $commentsIndex = [Array]::IndexOf($global:Headers, 'Comments')
+0028:          if ($commentsIndex -lt 0) {
+0029:              $newCol = $colCount + 1
+0030:              $global:Worksheet.Cells.Item(1,$newCol) = 'Comments'
+0031:              $global:Workbook.Save()
+0032:              $global:UsedRange = $global:Worksheet.UsedRange
+0033:              $vals = $global:UsedRange.Value2
+0034:              $colCount = $vals.GetLength(1)
+0035:              $global:Headers = for ($c=1; $c -le $colCount; $c++) { [string]$vals.GetValue(1,$c) }
+0036:              $commentsIndex = [Array]::IndexOf($global:Headers, 'Comments')
+0037:          }
+0038:          return ($commentsIndex + 1) # convert to 1-based col index
+0039:      }
+0040:      finally { [System.Threading.Monitor]::Exit($global:ExcelLock) }
+0041:  }
+0042:  
+0043:  function Update-Row {
+0044:      Param(
+0045:          [int]$RowNumber,
+0046:          [hashtable]$Fields
+0047:      )
+0048:      [System.Threading.Monitor]::Enter($global:ExcelLock)
+0049:      try {
+0050:          $global:UsedRange = $global:Worksheet.UsedRange
+0051:          $colCount = $global:UsedRange.Columns.Count
+0052:          foreach ($key in $Fields.Keys) {
+0053:              $idx = [Array]::IndexOf($global:Headers, [string]$key)
+0054:              if ($idx -ge 0) {
+0055:                  $col = $idx + 1
+0056:                  $global:Worksheet.Cells.Item($RowNumber, $col) = $Fields[$key]
+0057:              }
+0058:          }
+0059:          $global:Workbook.Save()
+0060:      }
+0061:      finally { [System.Threading.Monitor]::Exit($global:ExcelLock) }
+0062:  }
+0063:  
+0064:  function Append-Comment {
+0065:      Param([int]$RowNumber, [string]$Comment)
+0066:      if ([string]::IsNullOrWhiteSpace($Comment)) { return }
+0067:      [System.Threading.Monitor]::Enter($global:ExcelLock)
+0068:      try {
+0069:          $col = Ensure-CommentsColumn
+0070:          $existing = $global:Worksheet.Cells.Item($RowNumber, $col).Text
+0071:          $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm')
+0072:          $newVal = if ([string]::IsNullOrEmpty($existing)) { "[$timestamp] $Comment" } else { "$existing`n[$timestamp] $Comment" }
+0073:          $global:Worksheet.Cells.Item($RowNumber, $col) = $newVal
+0074:          $global:Workbook.Save()
+0075:      }
+0076:      finally { [System.Threading.Monitor]::Exit($global:ExcelLock) }
+0077:  }
+0078:  
+0079:  function Handle-Api {
+0080:      Param($Context)
+0081:      $req = $Context.Request
+0082:      $path = $req.Url.AbsolutePath
+0083:      $method = $req.HttpMethod
+0084:      if ($path -eq '/api/health') { return (Write-Json -Context $Context -Object @{ ok = $true }) }
+0085:      if ($path -eq '/api/columns' -and $method -eq 'GET') {
+0086:          return (Write-Json -Context $Context -Object @{ columns = $global:Headers })
+0087:      }
+0088:      if ($path -eq '/api/search' -and $method -eq 'GET') {
+0089:          $query = Parse-Query -Uri $req.Url
+0090:          $q = $query['q']
+0091:          $limitVal = 0; [void][int]::TryParse($query['limit'], [ref]$limitVal); $limit = if ($limitVal -gt 0) { $limitVal } else { 100 }
+0092:          $rows = Get-AllRows
+0093:          if (-not [string]::IsNullOrWhiteSpace($q)) {
+0094:              $qLower = $q.ToLowerInvariant()
+0095:              $rows = $rows | Where-Object {
+0096:                  $match = $false
+0097:                  foreach ($k in $_.psobject.Properties.Name) {
+0098:                      if ($k -eq 'rowNumber') { continue }
+0099:                      $v = [string]($_.$k)
+0100:                      if ($v -and $v.ToLowerInvariant().Contains($qLower)) { $match = $true; break }
+0101:                  }
+0102:                  $match
+0103:              }
+0104:          }
+0105:          $total = ($rows | Measure-Object).Count
+0106:          $rows = $rows | Select-Object -First $limit
+0107:          return (Write-Json -Context $Context -Object @{ total = $total; items = $rows })
+0108:      }
+0109:      if ($path -match '^/api/row/(\d+)$' -and $method -eq 'GET') {
+0110:          $rowNum = [int]$Matches[1]
+0111:          $row = Get-RowByNumber -RowNumber $rowNum
+0112:          return (Write-Json -Context $Context -Object $row)
+0113:      }
+0114:      if ($path -match '^/api/row/(\d+)$' -and $method -eq 'POST') {
+0115:          $rowNum = [int]$Matches[1]
+0116:          $body = Read-BodyJson -Request $req
+0117:          if (-not $body) { return (Write-Json -Context $Context -Object @{ error = 'Empty body' } -StatusCode 400) }
+0118:          $fields = @{}
+0119:          foreach ($p in $body.PSObject.Properties) { if ($p.Name -ne 'rowNumber') { $fields[$p.Name] = $p.Value } }
+0120:          Update-Row -RowNumber $rowNum -Fields $fields
+0121:          $updated = Get-RowByNumber -RowNumber $rowNum
+0122:          return (Write-Json -Context $Context -Object $updated)
+0123:      }
+0124:      if ($path -match '^/api/row/(\d+)/comment$' -and $method -eq 'POST') {
+0125:          $rowNum = [int]$Matches[1]
+0126:          $body = Read-BodyJson -Request $req
+0127:          $comment = [string]$body.comment
+0128:          if ([string]::IsNullOrWhiteSpace($comment)) { return (Write-Json -Context $Context -Object @{ error = 'Missing comment' } -StatusCode 400) }
+0129:          Append-Comment -RowNumber $rowNum -Comment $comment
+0130:          $updated = Get-RowByNumber -RowNumber $rowNum
+0131:          return (Write-Json -Context $Context -Object $updated)
+0132:      }
+0133:      return $false
+0134:  }
+0135:  
+0136:  function Parse-Query {
+0137:      Param([Parameter(Mandatory)] [uri]$Uri)
+0138:      $qs = $Uri.Query
+0139:      if ($qs.StartsWith('?')) { $qs = $qs.Substring(1) }
+0140:      $dict = @{}
+0141:      if ([string]::IsNullOrEmpty($qs)) { return $dict }
+0142:      foreach ($pair in $qs -split '&') {
+0143:          if ([string]::IsNullOrWhiteSpace($pair)) { continue }
+0144:          $kv = $pair -split '=', 2
+0145:          $k = [System.Uri]::UnescapeDataString($kv[0])
+0146:          $v = if ($kv.Length -gt 1) { [System.Uri]::UnescapeDataString($kv[1]) } else { '' }
+0147:          $dict[$k] = $v
+0148:      }
+0149:      return $dict
+0150:  }
+0151:  
+0152:  function Handle-Static {
+0153:      Param($Context)
+0154:      $req = $Context.Request
+0155:      $path = $req.Url.AbsolutePath
+0156:      $root = Join-Path $PSScriptRoot '..' | Join-Path -ChildPath 'ui'
+0157:      $file = if ($path -eq '/' -or $path -eq '') { Join-Path $root 'index.html' } else { Join-Path $root ($path.TrimStart('/')) }
+0158:      if (-not (Test-Path $file)) { return $false }
+0159:      $bytes = [System.IO.File]::ReadAllBytes($file)
+0160:      $ctype = Get-ContentType -Path $file
+0161:      $Context.Response.StatusCode = 200
+0162:      $Context.Response.ContentType = $ctype
+0163:      $Context.Response.ContentLength64 = $bytes.Length
+0164:      $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+0165:      $Context.Response.OutputStream.Flush()
+0166:      return $true
+0167:  }
+0168:  
+0169:  function Start-Server {
+0170:      Open-Workbook
+0171:      $listener = New-Object System.Net.HttpListener
+0172:      $addr = $Address.TrimEnd('/')
+0173:      if ($addr -notmatch '^https?://') { $addr = "http://$addr" }
+0174:      $prefix = "${addr}:$Port/"
+0175:      $listener.Prefixes.Add($prefix)
+0176:      $listener.Start()
+0177:      Write-Host "Server listening at $prefix"
+0178:      try {
+0179:          while ($true) {
+0180:              $context = $listener.GetContext()
+0181:              try {
+0182:                  $handled = $false
+0183:                  if ($context.Request.Url.AbsolutePath.StartsWith('/api')) {
+0184:                      $handled = Handle-Api -Context $context
+0185:                      if (-not $handled) { Write-Json -Context $context -Object @{ error = 'Not found' } -StatusCode 404 }
+0186:                  } else {
+0187:                      $handled = Handle-Static -Context $context
+0188:                      if (-not $handled) { Write-Text -Context $context -Text 'Not found' -StatusCode 404 }
+0189:                  }
+0190:              }
+0191:              catch {
+0192:                  $err = $_.Exception.Message
+0193:                  try { Write-Json -Context $context -Object @{ error = $err } -StatusCode 500 } catch {}
+0194:              }
+0195:              finally { $context.Response.OutputStream.Close() }
+0196:          }
+0197:      }
+0198:      finally {
+0199:          $listener.Stop()
+0200:          Close-Workbook
+0201:      }
+0202:  }
+0203:  
+0204:  Start-Server

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spreadsheet Interface</title>
+    <style>
+      :root{
+        --bg:#2b2f36; --panel:#343a46; --border:#454c59; --text:#e6e8eb; --sub:#9aa3b2; --accent:#4f46e5; --accent-2:#64748b;
+        --input:#2b2f36; --hover:#3a404d;
+      }
+      *{box-sizing:border-box}
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+      header { padding: 12px 16px; background: #232730; color: var(--text); border-bottom:1px solid var(--border); }
+      main { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; margin: 0 auto; }
+      .toolbar { display:flex; gap:8px; align-items:center; }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+      .panel .content { padding: 12px; }
+      h2 { font-size: 14px; margin: 0 0 8px; color: var(--sub); font-weight:600 }
+      input[type="text"], input[type="number"], textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input); color: var(--text); }
+      button { padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; cursor: pointer; }
+      button.secondary { border-color: var(--accent-2); background: var(--accent-2); }
+      button.ghost { background: transparent; border-color: var(--border); color: var(--text); }
+      button:hover{ filter:brightness(1.05) }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px; }
+      tr:hover { background: var(--hover); }
+      .muted { color: var(--sub); font-size: 12px; }
+      .grid-fields { display: grid; grid-template-columns: 1fr; gap: 8px; }
+      .field { display: grid; grid-template-columns: 160px 1fr; gap: 8px; align-items: center; }
+      .row { display:flex; gap:8px; align-items:center }
+      .spacer { flex:1 }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Spreadsheet Interface</strong>
+    </header>
+    <main>
+      <div class="panel">
+        <div class="content">
+          <div class="toolbar">
+            <input id="query" type="text" placeholder="Search across all columns" />
+            <input id="limit" type="number" min="1" max="1000" value="100" title="Max results" style="width: 120px" />
+            <button id="btnSearch">Search</button>
+            <span class="spacer"></span>
+            <button class="ghost" id="btnNew">New Entry</button>
+          </div>
+          <div class="muted" id="resultMeta" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="content" style="overflow:auto; max-height: 48vh">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" id="createPanel" style="display:none">
+        <div class="content">
+          <h2>New Entry</h2>
+          <div class="grid-fields" id="createFields"></div>
+          <div class="row" style="margin-top:10px">
+            <button id="btnCreate">Create</button>
+            <button class="secondary" id="btnCancelCreate">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="content">
+          <h2>Details</h2>
+          <div id="detailsEmpty" class="muted">Select a row to view and edit fields.</div>
+          <div id="details" style="display:none">
+            <div class="muted" id="rowInfo"></div>
+            <div class="grid-fields" id="fields"></div>
+            <div class="row" style="margin-top:10px">
+              <button id="btnSave">Save Changes</button>
+              <button class="secondary" id="btnReload">Reload</button>
+            </div>
+            <div style="height:12px"></div>
+            <h2>Add Comment</h2>
+            <textarea id="comment" rows="3" placeholder="Write a comment..."></textarea>
+            <div style="margin-top:8px">
+              <button id="btnComment">Add Comment</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="app.js"></script>
+  </body>
+  </html>

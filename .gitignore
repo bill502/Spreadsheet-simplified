@@ -1,0 +1,15 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+
+# Excel temp/lock files
+~$*.xls*
+
+# Logs / temp
+*.log
+tmp/
+
