@@ -188,7 +188,7 @@ function renderDetails() {
   }
 
   // Full editable grid (edit mode)
-  const readOnly = new Set(['ID','new ID','CallDate','VisitDate']);
+  const readOnly = new Set(['ID','new ID','CallDate','VisitDate','LCDate']);
   const keys = Array.from(new Set([...Object.keys(d).filter(k => k !== 'rowNumber'), 'LawyerForum']));
   const all = document.createElement('div'); all.className='grid-fields'; all.style.marginTop='10px';
   keys.forEach(k => {

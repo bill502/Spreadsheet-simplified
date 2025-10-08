@@ -25,6 +25,17 @@ async function createOrUpdateUser(){ const username=el('admUser').value.trim(); 
 
 async function doRevert(){ const from=el('revFrom').value; const to=el('revTo').value; if(!from||!to){ toast('from/to required'); return } const res = await api('/api/admin/revert',{ method:'POST', body: JSON.stringify({ from, to })}); el('revertMsg').textContent = `Reverted ${res.reverted ?? 0} change(s)` }
 
-function bind(){ el('btnLogout')?.addEventListener('click', async ()=>{ try{ await api('/api/logout',{method:'POST'}); location.href='index.html' }catch(e){ toast(e.message) } }); el('btnUsersRefresh')?.addEventListener('click', ()=> loadUsers().catch(e=>toast(e.message))); el('btnCreateUser')?.addEventListener('click', ()=> createOrUpdateUser().catch(e=>toast(e.message))); el('btnCancelEdit')?.addEventListener('click', ()=> cancelEdit()); el('btnRevert')?.addEventListener('click', ()=> doRevert().catch(e=>toast(e.message))) }
+function bind(){
+  el('btnLogout')?.addEventListener('click', async ()=>{ try{ await api('/api/logout',{method:'POST'}); location.href='index.html' }catch(e){ toast(e.message) } });
+  el('btnUsersRefresh')?.addEventListener('click', ()=> loadUsers().catch(e=>toast(e.message)));
+  el('btnCreateUser')?.addEventListener('click', ()=> createOrUpdateUser().catch(e=>toast(e.message)));
+  el('btnCancelEdit')?.addEventListener('click', ()=> cancelEdit());
+  el('btnRevert')?.addEventListener('click', ()=> doRevert().catch(e=>toast(e.message)));
+  el('btnImport')?.addEventListener('click', async ()=>{
+    const p = (el('impPath')?.value || '').trim(); if(!p){ toast('Enter Excel path'); return }
+    try { const res = await api('/api/admin/import',{ method:'POST', body: JSON.stringify({ path: p })}); el('impMsg').textContent = `Imported ${res.count} rows (${res.sheet})`; toast('Import complete'); }
+    catch(e){ toast(e.message) }
+  });
+}
 
 (async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ await loadUsers() } } catch(e){ toast(`Init failed: ${e.message}`) } })();

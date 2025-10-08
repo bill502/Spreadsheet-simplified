@@ -78,6 +78,20 @@
           <div class="muted" id="revertMsg" style="margin-top:6px"></div>
         </div>
       </div>
+
+      <div class="panel" id="importPanel" style="display:none">
+        <div class="content">
+          <h2>Import Excel</h2>
+          <div class="grid-fields">
+            <div class="field"><label>Excel Path</label><input id="impPath" type="text" placeholder="./tbl_localities.xlsx" /></div>
+            <div class="field"><label>Sheet</label><input id="impSheetInfo" type="text" value="Uses 'merged' or first sheet automatically" disabled /></div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <button id="btnImport">Import from Path</button>
+          </div>
+          <div class="muted" id="impMsg" style="margin-top:6px"></div>
+        </div>
+      </div>
     </main>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="util.js"></script>

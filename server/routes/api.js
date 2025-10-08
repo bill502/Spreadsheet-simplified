@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
+import multer from 'multer';
+import path from 'node:path';
+import XLSX from 'xlsx';
 
 const router = express.Router();
 
@@ -323,6 +326,70 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
       try { const c = db.prepare(`SELECT COUNT(*) AS c FROM [${n.replace(']',']]')}]`).get().c; return { name: n, count: c } } catch { return { name: n, count: null } }
     });
     return res.json({ tables: list });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+// --- Import from Excel (admin) ---
+const upload = multer({ dest: '/tmp' });
+
+function sanitizePPUC(val){
+  if (val == null) return val;
+  if (typeof val === 'number') return String(Math.trunc(val));
+  const s = String(val).trim();
+  if (s.includes('.')) return s.split('.')[0];
+  return s;
+}
+
+function importFromWorksheet(ws){
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  if (!rows.length) return { count: 0 };
+  // Determine columns from headers
+  const headers = Object.keys(rows[0]).filter(Boolean);
+  // Drop columns explicitly
+  const drop = new Set(['HighlightedAddress','highlightedaddress','Status','status']);
+  const finalCols = headers.filter(h => !drop.has(h));
+  // Build table schema
+  const safeCols = finalCols.map(c => c.replace(']', ']]'));
+  const createCols = ['rowNumber INTEGER PRIMARY KEY'].concat(safeCols.map(c => `[${c}] TEXT`)).join(', ');
+  const tx = db.transaction(() => {
+    db.exec('DROP TABLE IF EXISTS people');
+    db.exec(`CREATE TABLE people (${createCols})`);
+    const idxs = ["CREATE INDEX IF NOT EXISTS idx_people_uc ON people([UC])", "CREATE INDEX IF NOT EXISTS idx_people_pp ON people([PP])", "CREATE INDEX IF NOT EXISTS idx_people_locality ON people([LocalityName])"];
+    idxs.forEach(sql => { try { db.exec(sql) } catch {} });
+    // Insert rows
+    let rowNumber = 1;
+    const ph = finalCols.map(c => `@${c.replace(/[^A-Za-z0-9_]/g,'_')}`).join(',');
+    const colSql = finalCols.map(c => `[${c.replace(']','']]')}]`).join(',');
+    const stmt = db.prepare(`INSERT INTO people (rowNumber, ${colSql}) VALUES (@rn, ${ph})`);
+    for (const r of rows){
+      const rec = {};
+      for (const c of finalCols){
+        let v = r[c];
+        if (c === 'PP' || c === 'UC') v = sanitizePPUC(v);
+        if (c.toLowerCase() === 'highlightedaddress' || c.toLowerCase() === 'status') continue; // dropped
+        rec[c.replace(/[^A-Za-z0-9_]/g,'_')] = v == null ? '' : String(v);
+      }
+      stmt.run({ rn: rowNumber++, ...rec });
+    }
+  });
+  tx();
+  return { count: rows.length, columns: finalCols };
+}
+
+router.post('/admin/import', requireRole('admin'), upload.single('file'), (req, res) => {
+  try {
+    let filePath = req.file?.path;
+    if (!filePath){
+      const p = (req.body?.path || '').toString().trim();
+      if (!p) return res.status(400).json({ error: 'Provide file via multipart field "file" or JSON body { path }' });
+      filePath = path.resolve(p);
+    }
+    const wb = XLSX.readFile(filePath);
+    const sheetName = wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const result = importFromWorksheet(ws);
+    return res.json({ ok: true, sheet: sheetName, ...result });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }
