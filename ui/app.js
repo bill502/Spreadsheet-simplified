@@ -11,6 +11,7 @@ const state = {
   editMode: false,
   user: null,
   role: 'viewer',
+  searchBy: null, // 'uc' | 'pp' | 'locality' | null
 };
 // api/toast/isTrueish/el/debounce provided by util.js
 
@@ -72,6 +73,7 @@ async function doSearch() {
   const url = new URL('/api/search', window.location.origin);
   if (q) url.searchParams.set('q', q);
   if (state.limit) url.searchParams.set('limit', String(state.limit));
+  if (state.searchBy) url.searchParams.set('by', state.searchBy);
   try {
     setLoading(true);
     const data = await api(url.toString());
@@ -269,6 +271,17 @@ function bind() {
   el('btnCreate').addEventListener('click', () => createEntry().catch(e => toast(e.message)));
   el('btnCancelCreate').addEventListener('click', () => hideCreateForm());
   const more = el('btnMore'); if (more) more.addEventListener('click', () => { state.limit += 50; if (el('limit')) el('limit').value = String(state.limit); doSearch().catch(e => toast(e.message)); });
+  // Search-by checkboxes (mutually exclusive, or none)
+  const setSearchBy = (by) => {
+    state.searchBy = by;
+    const m = { uc: el('byUC'), pp: el('byPP'), locality: el('byLocality') };
+    if (m.uc) m.uc.checked = (by === 'uc');
+    if (m.pp) m.pp.checked = (by === 'pp');
+    if (m.locality) m.locality.checked = (by === 'locality');
+  };
+  el('byUC')?.addEventListener('change', (e) => setSearchBy(e.target.checked ? 'uc' : null));
+  el('byPP')?.addEventListener('change', (e) => setSearchBy(e.target.checked ? 'pp' : null));
+  el('byLocality')?.addEventListener('change', (e) => setSearchBy(e.target.checked ? 'locality' : null));
   // Auth controls
   el('btnLogin')?.addEventListener('click', () => {
     const p = el('loginPanel'); if (p) { p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'block' : 'none'; if (p.style.display==='block'){ el('loginUser')?.focus() } }

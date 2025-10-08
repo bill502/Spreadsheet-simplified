@@ -353,13 +353,22 @@ function Handle-Api { Param($Context)
         $created = Get-RowByNumber -RowNumber $new; return (Write-Json -Context $Context -Object $created -StatusCode 201)
     }
     if ($path -eq '/api/search' -and $method -eq 'GET') {
-        $query = Parse-Query -Uri $req.Url; $q=$query['q']; $lim = [int]($query['limit'] ?? 100)
+        $query = Parse-Query -Uri $req.Url; $q=$query['q']; $lim = [int]($query['limit'] ?? 100); $by = [string]$query['by']
         if ([string]::IsNullOrWhiteSpace($q)) {
             $items = Exec-Query -Sql "SELECT * FROM people ORDER BY rowNumber LIMIT @l" -Params @{ l=$lim }
             $total = (Exec-Query -Sql "SELECT COUNT(*) AS c FROM people")[0].c
             return (Write-Json -Context $Context -Object @{ total=$total; items=$items })
         } else {
-            $likeCols = @($global:Headers | Where-Object { $_ -and $_ -ne 'rowNumber' })
+            $likeCols = @()
+            switch ($by) {
+                'uc' { $likeCols = @('UC','Uc') }
+                'pp' { $likeCols = @('PP','Pp') }
+                'locality' { $likeCols = @('Locality','LocalityName') }
+                default { $likeCols = @($global:Headers | Where-Object { $_ -and $_ -ne 'rowNumber' }) }
+            }
+            # ensure columns exist in headers
+            $likeCols = @($likeCols | Where-Object { $global:Headers -contains $_ })
+            if ($likeCols.Count -eq 0) { $likeCols = @($global:Headers | Where-Object { $_ -and $_ -ne 'rowNumber' }) }
             $conds = @(); foreach($c in $likeCols){ $conds += "[${c}] LIKE @pat" }
             $sql = "SELECT * FROM people WHERE " + ($conds -join ' OR ') + " ORDER BY rowNumber LIMIT @l"
             $items = Exec-Query -Sql $sql -Params @{ pat = '%'+$q+'%'; l=$lim }
