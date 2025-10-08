@@ -1,6 +1,15 @@
 "use strict";
 const el = (id) => document.getElementById(id);
 const debounce = (fn, wait=400) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); }; };
+// Convert DB values (0/1, "0"/"1", true/false) to boolean for checkboxes
+const isTrueish = (v) => {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0 || v === null || v === undefined) return false;
+  const s = String(v).trim().toLowerCase();
+  if (s === '' || s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
+  if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
+  return false;
+};
 const toast = (msg, ms=2500) => {
   const n = el('toast'); if (!n) { alert(msg); return; }
   n.textContent = msg; n.style.display='block';
@@ -156,16 +165,15 @@ function renderDetails() {
 
   // Called / Visited toggles with dates and ID badges
   const topRow = document.createElement('div'); topRow.className = 'row'; topRow.style.gap = '12px'; topRow.style.flexWrap = 'wrap';
-  const calledWrap = document.createElement('label'); const cbCalled = document.createElement('input'); cbCalled.type = 'checkbox'; cbCalled.checked = !!d.Called; calledWrap.append(' Called ', cbCalled);
+  const calledWrap = document.createElement('label'); const cbCalled = document.createElement('input'); cbCalled.type = 'checkbox'; cbCalled.checked = isTrueish(d.Called); calledWrap.append(' Called ', cbCalled);
   const calledDate = document.createElement('span'); calledDate.className = 'muted'; calledDate.textContent = `Date: ${d.CallDate ?? ''}`;
-  const visitedWrap = document.createElement('label'); const cbVisited = document.createElement('input'); cbVisited.type = 'checkbox'; cbVisited.checked = !!d.Visited; visitedWrap.append(' Visited ', cbVisited);
+  const visitedWrap = document.createElement('label'); const cbVisited = document.createElement('input'); cbVisited.type = 'checkbox'; cbVisited.checked = isTrueish(d.Visited); visitedWrap.append(' Visited ', cbVisited);
   const visitedDate = document.createElement('span'); visitedDate.className = 'muted'; visitedDate.textContent = `Date: ${d.VisitDate ?? ''}`;
-  const voterWrap = document.createElement('label'); const cbVoter = document.createElement('input'); cbVoter.type = 'checkbox'; cbVoter.checked = !!d.ConfirmedVoter; voterWrap.append(' Confirmed Voter ', cbVoter);
+  const voterWrap = document.createElement('label'); const cbVoter = document.createElement('input'); cbVoter.type = 'checkbox'; cbVoter.checked = isTrueish(d.ConfirmedVoter); voterWrap.append(' Confirmed Voter ', cbVoter);
   const forumInput = document.createElement('input'); forumInput.type = 'text'; forumInput.placeholder = 'Lawyer Forum'; forumInput.value = d.LawyerForum ?? '';
-  forumInput.style.minWidth = '160px';
-  const forumBtn = document.createElement('button'); forumBtn.className = 'secondary'; forumBtn.textContent = 'Save Forum';
+  forumInput.style.minWidth = '160px'; forumInput.dataset.key = 'LawyerForum';
   const idBadge = document.createElement('span'); idBadge.className = 'muted'; idBadge.textContent = `ID: ${d.ID ?? ''}  |  New ID: ${d['new ID'] ?? ''}`;
-  topRow.append(calledWrap, calledDate, visitedWrap, visitedDate, voterWrap, forumInput, forumBtn, idBadge);
+  topRow.append(calledWrap, calledDate, visitedWrap, visitedDate, voterWrap, forumInput, idBadge);
   fields.appendChild(topRow);
 
   const todayISO = () => new Date().toLocaleDateString('en-CA');
@@ -190,13 +198,7 @@ function renderDetails() {
       state.selectedData = updated; renderDetails();
     } catch(e) { toast(e.message); cbVoter.checked = !cbVoter.checked; }
   });
-  forumBtn.addEventListener('click', async () => {
-    try {
-      const payload = { LawyerForum: forumInput.value };
-      const updated = await api(`/api/row/${state.selectedRowNumber}`, { method: 'POST', body: JSON.stringify(payload) });
-      state.selectedData = updated; toast('Forum saved');
-    } catch(e) { toast(e.message); }
-  });
+  // No separate save for forum; Save Changes will include this field via data-key
 
   // Edit toggle
   if (!state.editMode) {
