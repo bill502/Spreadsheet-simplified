@@ -2,10 +2,13 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Default DB path: use env if provided. In production (Render/Railway), default to /data/app.db.
 const DEFAULT_DB = process.env.DATABASE_URL
   || ((process.env.RENDER || process.env.NODE_ENV === 'production') ? '/data/app.db' : path.resolve('./data/app.db'));
+
+console.log('[db] DATABASE_URL =', DEFAULT_DB);
 
 // First-boot bootstrap: if DB path does not exist, copy from a seed in the repo if available
 try {
@@ -37,6 +40,43 @@ db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');
+
+// --- Simple migration runner ---
+function getServerDir() {
+  const __filename = fileURLToPath(import.meta.url);
+  return path.dirname(__filename);
+}
+
+function ensureMigrationsTable() {
+  db.prepare(`CREATE TABLE IF NOT EXISTS __migrations (
+    name TEXT PRIMARY KEY,
+    run_at TEXT
+  )`).run();
+}
+
+export function runMigrations() {
+  try {
+    ensureMigrationsTable();
+    const serverDir = getServerDir();
+    const migDir = path.join(serverDir, 'migrations');
+    if (!fs.existsSync(migDir)) return;
+    const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
+    const applied = new Set(db.prepare('SELECT name FROM __migrations').all().map(r => r.name));
+    const tx = db.transaction((sqlFiles) => {
+      for (const f of sqlFiles) {
+        if (applied.has(f)) continue;
+        const sql = fs.readFileSync(path.join(migDir, f), 'utf8');
+        db.exec(sql);
+        db.prepare('INSERT INTO __migrations(name, run_at) VALUES(?, ?)').run(f, new Date().toISOString());
+        console.log('[db] Applied migration', f);
+      }
+    });
+    tx(files);
+  } catch (e) {
+    console.error('[db] Migration error:', e?.message || e);
+    throw e;
+  }
+}
 
 export function initDb() {
   // Ensure required tables exist (idempotent). People table likely already present.

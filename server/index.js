@@ -6,11 +6,14 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 
-import { initDb } from './db.js';
+import { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
 
 dotenv.config();
 initDb();
+try {
+  runMigrations();
+} catch {}
 
 const app = express();
 

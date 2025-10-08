@@ -72,10 +72,11 @@ router.get('/columns', (req, res) => {
 router.get('/search', (req, res) => {
   const q = (req.query.q || '').toString().trim();
   const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit || '100', 10)));
+  const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
   const by = (req.query.by || '').toString().trim();
   const cols = getColumns();
   if (!q) {
-    const items = db.prepare('SELECT * FROM people ORDER BY rowNumber LIMIT ?').all(limit);
+    const items = db.prepare('SELECT * FROM people ORDER BY rowNumber LIMIT ? OFFSET ?').all(limit, offset);
     const total = db.prepare('SELECT COUNT(*) AS c FROM people').get().c;
     return res.json({ total, items });
   }
@@ -85,9 +86,11 @@ router.get('/search', (req, res) => {
   else if (by === 'locality') likeCols = ['Locality', 'LocalityName'];
   else likeCols = cols.filter(c => c && c !== 'rowNumber');
   likeCols = likeCols.filter(c => cols.includes(c));
-  if (likeCols.length === 0) likeCols = cols.filter(c => c && c !== 'rowNumber');
+  if (likeCols.length === 0) {
+    return res.json({ total: 0, items: [] });
+  }
   const conds = likeCols.map(c => `[${c}] LIKE @pat`).join(' OR ');
-  const items = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY rowNumber LIMIT @l`).all({ pat: `%${q}%`, l: limit });
+  const items = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY rowNumber LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
   const total = db.prepare(`SELECT COUNT(*) AS c FROM people WHERE ${conds}`).get({ pat: `%${q}%` }).c;
   return res.json({ total, items });
 });
@@ -292,4 +295,34 @@ router.get('/reports', requireRole('editor'), (req, res) => {
 });
 
 export default router;
+// Debug routes (guarded)
+function debugGuard(req, res, next){
+  if (process.env.NODE_ENV !== 'production') return next();
+  const t = req.get('X-Debug-Token');
+  if (t && process.env.DEBUG_TOKEN && t === process.env.DEBUG_TOKEN) return next();
+  return res.status(403).json({ error: 'Forbidden' });
+}
 
+router.get('/_debug/db', debugGuard, (req, res) => {
+  try {
+    const dbPath = (process.env.DATABASE_URL || '/data/app.db');
+    let exists = false, sizeBytes = 0, tablesCount = 0;
+    try { const st = fs.statSync(dbPath); exists = st.isFile(); sizeBytes = st.size; } catch {}
+    try { tablesCount = db.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").get().c } catch {}
+    return res.json({ dbPath, exists, sizeBytes, tablesCount });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+router.get('/_debug/tables', debugGuard, (req, res) => {
+  try {
+    const names = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name);
+    const list = names.map(n => {
+      try { const c = db.prepare(`SELECT COUNT(*) AS c FROM [${n.replace(']',']]')}]`).get().c; return { name: n, count: c } } catch { return { name: n, count: null } }
+    });
+    return res.json({ tables: list });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
