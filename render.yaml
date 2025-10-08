@@ -2,6 +2,7 @@ services:
   - type: web
     name: my-app
     env: node
+    rootDir: .
     buildCommand: npm install
     startCommand: node server/index.js
     plan: starter
@@ -11,4 +12,3 @@ services:
       name: data
       mountPath: /data
       sizeGB: 5
-
