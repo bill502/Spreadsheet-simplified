@@ -1,10 +1,12 @@
 Param(
     [int]$Port = 8080,
     [string]$Address = "http://localhost",
-    [string]$FilePath
+    [string]$FilePath,
+    [string]$DbPath
 )
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
 function Write-Json {
     Param(
@@ -71,6 +73,8 @@ $global:Worksheet = $null
 $global:Headers = @()
 $global:UsedRange = $null
 $global:ExcelLock = New-Object object
+$global:DbLock = New-Object object
+$global:DbConn = $null
 
 function Get-SpreadsheetPath {
     if ($FilePath) { return (Resolve-Path $FilePath).Path }

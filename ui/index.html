@@ -30,6 +30,14 @@
       .field { display: grid; grid-template-columns: 160px 1fr; gap: 8px; align-items: center; }
       .row { display:flex; gap:8px; align-items:center }
       .spacer { flex:1 }
+      @media (max-width: 640px) {
+        main { padding: 8px; gap: 10px; }
+        .toolbar { flex-wrap: wrap; gap: 6px; }
+        .toolbar input, .toolbar button { flex: 1 1 100%; }
+        button { padding: 12px 14px; border-radius: 10px; }
+        th, td { padding: 10px; font-size: 14px; }
+        h2 { font-size: 16px; }
+      }
     </style>
   </head>
   <body>
@@ -41,12 +49,13 @@
         <div class="content">
           <div class="toolbar">
             <input id="query" type="text" placeholder="Search across all columns" />
-            <input id="limit" type="number" min="1" max="1000" value="100" title="Max results" style="width: 120px" />
+            <input id="limit" type="number" min="1" max="1000" value="50" title="Max results" style="width: 120px" />
             <button id="btnSearch">Search</button>
             <span class="spacer"></span>
             <button class="ghost" id="btnNew">New Entry</button>
           </div>
           <div class="muted" id="resultMeta" style="margin-top:6px"></div>
+          <div class="muted" id="loading" style="display:none; margin-top:6px">Searching…</div>
         </div>
       </div>
 
@@ -56,6 +65,9 @@
             <thead id="thead"></thead>
             <tbody id="tbody"></tbody>
           </table>
+          <div class="row" style="justify-content:center; margin-top:10px">
+            <button id="btnMore" class="ghost" style="display:none">Show more</button>
+          </div>
         </div>
       </div>
 
@@ -72,7 +84,7 @@
 
       <div class="panel">
         <div class="content">
-          <h2>Details</h2>
+          <h2>Profile</h2>
           <div id="detailsEmpty" class="muted">Select a row to view and edit fields.</div>
           <div id="details" style="display:none">
             <div class="muted" id="rowInfo"></div>

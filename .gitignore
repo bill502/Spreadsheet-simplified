@@ -13,3 +13,17 @@ Thumbs.db
 *.log
 tmp/
 
+# SQLite + provider artifacts
+lib/sqlite/**/
+!lib/sqlite/
+!lib/sqlite/System.Data.SQLite.dll
+!lib/sqlite/SQLite.Interop.dll
+lib/sqlite/*.nupkg
+lib/sqlite/bundle/**
+
+# SQLite database
+data/**/*.db
+
+# Temp files
+tmp_*.txt
+tmp_*.ps1
