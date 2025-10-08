@@ -32,6 +32,7 @@ const state = {
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...opts,
   });
   if (!res.ok) {
@@ -300,10 +301,13 @@ function bind() {
   el('btnCancelCreate').addEventListener('click', () => hideCreateForm());
   const more = el('btnMore'); if (more) more.addEventListener('click', () => { state.limit += 50; if (el('limit')) el('limit').value = String(state.limit); doSearch().catch(e => toast(e.message)); });
   // Auth controls
-  el('btnLogin')?.addEventListener('click', async () => {
-    const username = prompt('Username'); if (!username) return;
-    const password = prompt('Password'); if (password === null) return;
-    try { const me = await api('/api/login', { method:'POST', body: JSON.stringify({ username, password }) }); state.user = me.user; state.role = me.role || 'viewer'; renderAuth(); toast('Signed in'); } catch(e){ toast(e.message); }
+  el('btnLogin')?.addEventListener('click', () => {
+    const p = el('loginPanel'); if (p) { p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'block' : 'none'; if (p.style.display==='block'){ el('loginUser')?.focus() } }
+  });
+  el('btnLoginSubmit')?.addEventListener('click', async () => {
+    const username = (el('loginUser')?.value || '').trim(); const password = (el('loginPass')?.value || '');
+    if (!username || !password) { toast('Username and password required'); return }
+    try { const me = await api('/api/login', { method:'POST', body: JSON.stringify({ username, password }) }); state.user = me.user; state.role = me.role || 'viewer'; renderAuth(); const p=el('loginPanel'); if(p) p.style.display='none'; toast('Signed in'); } catch(e){ toast(e.message); }
   });
   el('btnLogout')?.addEventListener('click', async () => {
     try { await api('/api/logout', { method:'POST' }); state.user=null; state.role='viewer'; renderAuth(); toast('Signed out'); } catch(e){ toast(e.message) }
@@ -330,5 +334,7 @@ function renderAuth(){
   const lbl = el('userLabel'); if (lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer';
   const login = el('btnLogin'), logout=el('btnLogout');
   if (login && logout){ if (state.user){ login.style.display='none'; logout.style.display=''; } else { login.style.display=''; logout.style.display='none'; } }
-  const adm = document.getElementById('adminPanel'); if (adm) adm.style.display = (state.role === 'admin') ? '' : 'none';
+  const linkAdm = el('linkAdmin'); if (linkAdm) linkAdm.style.display = (state.role === 'admin') ? '' : 'none';
+  const linkRep = el('linkReports'); if (linkRep) linkRep.style.display = (state.role === 'editor' || state.role === 'admin') ? '' : 'none';
+  const loginPanel = el('loginPanel'); if (loginPanel) loginPanel.style.display = state.user ? 'none' : loginPanel.style.display;
 }

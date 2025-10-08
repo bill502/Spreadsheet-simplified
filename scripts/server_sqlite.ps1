@@ -268,13 +268,17 @@ function Handle-Api { Param($Context)
     if ($path -eq '/api/login' -and $method -eq 'POST') {
         $body = Read-BodyJson -Request $req; $u=([string]$body.username).Trim(); $p=([string]$body.password).Trim()
         if ([string]::IsNullOrWhiteSpace($u) -or [string]::IsNullOrWhiteSpace($p)) { return (Write-Json -Context $Context -Object @{ error='Missing credentials' } -StatusCode 400) }
-        # Resilient seed: if users table exists but empty, seed admin/admin
+        # Ensure users table and seed admin/admin if empty
+        Exec-NonQuery -Sql "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)" -Params @{} | Out-Null
         $uCount = Exec-Scalar -Sql "SELECT COUNT(*) FROM users" -Params @{}
         if ([int]$uCount -eq 0) { Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES('admin','admin','admin')" -Params @{} | Out-Null }
         $row = Exec-Query -Sql "SELECT username, password, role FROM users WHERE username=@u" -Params @{ u=$u } | Select-Object -First 1
+        if (-not $row) {
+            if ($u -eq 'admin' -and $p -eq 'admin') { Exec-NonQuery -Sql "INSERT OR REPLACE INTO users(username,password,role) VALUES('admin','admin','admin')" -Params @{} | Out-Null; $row = @{ username='admin'; password='admin'; role='admin' } }
+        }
         if (-not $row -or ([string]$row.password) -ne $p) { return (Write-Json -Context $Context -Object @{ error='Invalid credentials' } -StatusCode 401) }
         $sid = New-Session -User $row.username -Role $row.role
-        $cookie = New-Object System.Net.Cookie('sid',$sid); $cookie.Path='/'; $Context.Response.Cookies.Add($cookie)
+        $cookie = New-Object System.Net.Cookie('sid',$sid); $cookie.Path='/'; $cookie.HttpOnly = $true; $Context.Response.Cookies.Add($cookie)
         return (Write-Json -Context $Context -Object @{ user=$row.username; role=$row.role })
     }
     if ($path -eq '/api/logout' -and $method -eq 'POST') {
@@ -285,6 +289,57 @@ function Handle-Api { Param($Context)
         $sess = Get-UserFromRequest -Request $req; return (Write-Json -Context $Context -Object @{ user=$sess.user; role=($sess.role ?? 'viewer') })
     }
     if ($path -eq '/api/columns' -and $method -eq 'GET') { return (Write-Json -Context $Context -Object @{ columns = $global:Headers }) }
+    if ($path -eq '/api/reports' -and $method -eq 'GET') {
+        $sess = Require-Role -Context $Context -minRole 'editor'; if (-not $sess) { return $true }
+        $q = Parse-Query -Uri $req.Url
+        $limit = [int]($q['limit'] ?? 200)
+        $conds = @()
+        $params = @{}
+        # Called/Visited date filters (YYYY-MM-DD)
+        if ($q['calledFrom']) { $conds += "[CallDate] >= @cf"; $params['cf'] = [string]$q['calledFrom'] }
+        if ($q['calledTo']) { $conds += "[CallDate] <= @ct"; $params['ct'] = [string]$q['calledTo'] }
+        if ($q['visitedFrom']) { $conds += "[VisitDate] >= @vf"; $params['vf'] = [string]$q['visitedFrom'] }
+        if ($q['visitedTo']) { $conds += "[VisitDate] <= @vt"; $params['vt'] = [string]$q['visitedTo'] }
+        # Location filters (match any available column)
+        function Add-Like {
+            Param([string]$value,[string[]]$candidates,[string]$paramKey)
+            if ([string]::IsNullOrWhiteSpace($value)) { return }
+            $names = @()
+            foreach($c in $candidates){ if ($global:Headers -contains $c) { $names += '['+($c.Replace(']',']]'))+'] LIKE @'+$paramKey } }
+            if ($names.Count -gt 0) { $script:conds += '('+($names -join ' OR ')+')'; $script:params[$paramKey] = '%'+$value+'%' }
+        }
+        Add-Like -value ([string]$q['uc']) -candidates @('UC','Uc') -paramKey 'uc'
+        Add-Like -value ([string]$q['pp']) -candidates @('PP','Pp') -paramKey 'pp'
+        Add-Like -value ([string]$q['locality']) -candidates @('Locality','LocalityName') -paramKey 'loc'
+        # Modified by user/time filters (via audit)
+        $auditConds = @('action = ''update''')
+        if ($q['byUser']) { $auditConds += 'user = @au'; $params['au'] = [string]$q['byUser'] }
+        if ($q['session'] -eq 'current' -and $sess) {
+            if (-not $q['byUser']) { $auditConds += 'user = @au'; $params['au'] = [string]$sess.user }
+            $fromIso = ($sess.created.ToString('s'))
+            $auditConds += 'ts >= @mf'; $params['mf'] = $fromIso
+        } elseif ($q['modifiedFrom']) { $auditConds += 'ts >= @mf'; $params['mf'] = [string]$q['modifiedFrom'] }
+        if ($q['modifiedTo']) { $auditConds += 'ts <= @mt'; $params['mt'] = [string]$q['modifiedTo'] }
+        if ($auditConds.Count -gt 1) {
+            $conds += '(rowNumber IN (SELECT rowNumber FROM audit WHERE '+(($auditConds -join ' AND '))+'))'
+        } elseif ($q['byUser'] -or $q['modifiedFrom'] -or $q['modifiedTo']) {
+            # Only one condition set (still restrict by audit)
+            $conds += '(rowNumber IN (SELECT rowNumber FROM audit WHERE '+(($auditConds -join ' AND '))+'))'
+        }
+        $sql = 'SELECT * FROM people'
+        if ($conds.Count -gt 0) { $sql += ' WHERE ' + ($conds -join ' AND ') }
+        $sql += ' ORDER BY rowNumber DESC LIMIT @l'
+        $params['l'] = $limit
+        $items = Exec-Query -Sql $sql -Params $params
+        $total = ($items | Measure-Object).Count
+        return (Write-Json -Context $Context -Object @{ total=$total; items=$items })
+    }
+    # Admin: list users
+    if ((@('/api/admin/users','/api/admin/users/') -contains $path) -and $method -eq 'GET') {
+        $sess = Require-Role -Context $Context -minRole 'admin'; if (-not $sess) { return $true }
+        $users = Exec-Query -Sql "SELECT username, role FROM users ORDER BY username" -Params @{}
+        return (Write-Json -Context $Context -Object @{ users = $users })
+    }
     if ($path -eq '/api/row' -and $method -eq 'POST') {
         $sess = Require-Role -Context $Context -minRole 'editor'; if (-not $sess) { return $true }
         $body = Read-BodyJson -Request $req; if ($null -eq $body) { $body=@{} }
@@ -333,13 +388,43 @@ function Handle-Api { Param($Context)
         return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n))
     }
     # Admin endpoints
-    if ($path -eq '/api/admin/user' -and $method -eq 'POST') {
+    if ((@('/api/admin/user','/api/admin/user/') -contains $path) -and $method -eq 'POST') {
         $sess = Require-Role -Context $Context -minRole 'admin'; if (-not $sess) { return $true }
-        $body = Read-BodyJson -Request $req; $u=[string]$body.username; $p=[string]$body.password; $r=[string]$body.role
-        if ([string]::IsNullOrWhiteSpace($u) -or [string]::IsNullOrWhiteSpace($p) -or [string]::IsNullOrWhiteSpace($r)) { return (Write-Json -Context $Context -Object @{ error='Missing fields' } -StatusCode 400) }
-        $exists = Exec-Scalar -Sql "SELECT COUNT(*) FROM users WHERE username=@u" -Params @{ u=$u }
-        if ([int]$exists -gt 0) { Exec-NonQuery -Sql "UPDATE users SET password=@p, role=@r WHERE username=@u" -Params @{ u=$u; p=$p; r=$r } | Out-Null }
-        else { Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES(@u,@p,@r)" -Params @{ u=$u; p=$p; r=$r } | Out-Null }
+        $body = Read-BodyJson -Request $req; $u=[string]$body.username; $p=$body.password; $r=[string]$body.role; $old=[string]$body.oldUsername
+        if ([string]::IsNullOrWhiteSpace($u) -or [string]::IsNullOrWhiteSpace($r)) { return (Write-Json -Context $Context -Object @{ error='Missing username/role' } -StatusCode 400) }
+        $target = ([string]::IsNullOrWhiteSpace($old)) ? $u : $old
+        $exists = [int](Exec-Scalar -Sql "SELECT COUNT(*) FROM users WHERE username=@u" -Params @{ u=$target })
+        if ($exists -gt 0) {
+            $rename = ($u -ne $target)
+            if ($rename) {
+                $taken = [int](Exec-Scalar -Sql "SELECT COUNT(*) FROM users WHERE username=@nu" -Params @{ nu=$u })
+                if ($taken -gt 0) { return (Write-Json -Context $Context -Object @{ error='Username already exists' } -StatusCode 409) }
+                if ($null -ne $p -and -not [string]::IsNullOrWhiteSpace([string]$p)) {
+                    Exec-NonQuery -Sql "UPDATE users SET username=@nu, password=@p, role=@r WHERE username=@ou" -Params @{ nu=$u; p=[string]$p; r=$r; ou=$target } | Out-Null
+                } else {
+                    Exec-NonQuery -Sql "UPDATE users SET username=@nu, role=@r WHERE username=@ou" -Params @{ nu=$u; r=$r; ou=$target } | Out-Null
+                }
+            } else {
+                if ($null -ne $p -and -not [string]::IsNullOrWhiteSpace([string]$p)) {
+                    Exec-NonQuery -Sql "UPDATE users SET password=@p, role=@r WHERE username=@u" -Params @{ u=$u; p=[string]$p; r=$r } | Out-Null
+                } else {
+                    Exec-NonQuery -Sql "UPDATE users SET role=@r WHERE username=@u" -Params @{ u=$u; r=$r } | Out-Null
+                }
+            }
+        } else {
+            if ([string]::IsNullOrWhiteSpace([string]$p)) { return (Write-Json -Context $Context -Object @{ error='Missing password for new user' } -StatusCode 400) }
+            Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES(@u,@p,@r)" -Params @{ u=$u; p=[string]$p; r=$r } | Out-Null
+        }
+        return (Write-Json -Context $Context -Object @{ ok=$true })
+    }
+    if ($path -match '^/api/admin/user/([^/]+)/?$' -and $method -eq 'DELETE') {
+        $sess = Require-Role -Context $Context -minRole 'admin'; if (-not $sess) { return $true }
+        $uname = [System.Uri]::UnescapeDataString($Matches[1])
+        $row = (Exec-Query -Sql "SELECT role FROM users WHERE username=@u" -Params @{ u=$uname }) | Select-Object -First 1
+        if (-not $row) { return (Write-Json -Context $Context -Object @{ error='Not found' } -StatusCode 404) }
+        $adminCount = [int](Exec-Scalar -Sql "SELECT COUNT(*) FROM users WHERE role='admin'" -Params @{})
+        if (($row.role -eq 'admin') -and $adminCount -le 1) { return (Write-Json -Context $Context -Object @{ error='Cannot delete the last admin' } -StatusCode 400) }
+        Exec-NonQuery -Sql "DELETE FROM users WHERE username=@u" -Params @{ u=$uname } | Out-Null
         return (Write-Json -Context $Context -Object @{ ok=$true })
     }
     if ($path -eq '/api/admin/revert' -and $method -eq 'POST') {
