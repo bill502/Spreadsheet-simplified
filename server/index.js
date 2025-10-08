@@ -18,7 +18,8 @@ try {
 const app = express();
 
 // Middleware
-app.set('trust proxy', true);
+// Render sits behind a single proxy; set an exact hop count to keep rate-limit safe
+app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 app.use(morgan('tiny'));
 app.use(express.json({ limit: '1mb' }));
