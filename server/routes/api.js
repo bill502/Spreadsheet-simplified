@@ -360,7 +360,7 @@ function importFromWorksheet(ws){
     // Insert rows
     let rowNumber = 1;
     const ph = finalCols.map(c => `@${c.replace(/[^A-Za-z0-9_]/g,'_')}`).join(',');
-    const colSql = finalCols.map(c => `[${c.replace(']','']]')}]`).join(',');
+    const colSql = finalCols.map(c => `[${c.replace(']', ']]')}]`).join(',');
     const stmt = db.prepare(`INSERT INTO people (rowNumber, ${colSql}) VALUES (@rn, ${ph})`);
     for (const r of rows){
       const rec = {};
