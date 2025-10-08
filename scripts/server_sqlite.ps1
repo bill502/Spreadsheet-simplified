@@ -447,6 +447,8 @@ function Handle-Static { Param($Context)
     $ctype = switch -regex ($file) {
         '\.html$' {'text/html; charset=utf-8'} '\.css$' {'text/css; charset=utf-8'} '\.js$' {'application/javascript; charset=utf-8'} default {'application/octet-stream'} }
     $Context.Response.StatusCode=200; $Context.Response.ContentType=$ctype; $Context.Response.ContentLength64=$bytes.Length
+    # Light static caching for performance
+    $Context.Response.Headers['Cache-Control'] = 'public, max-age=300'
     $Context.Response.OutputStream.Write($bytes,0,$bytes.Length); $Context.Response.OutputStream.Flush(); return $true
 }
 

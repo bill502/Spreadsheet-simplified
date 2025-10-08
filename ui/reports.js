@@ -1,24 +1,16 @@
 "use strict";
-const el = (id) => document.getElementById(id);
-const toast = (m,ms=2400)=>{ const n=el('toast'); if(!n){ alert(m); return } n.textContent=m; n.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>{ n.style.display='none' },ms) };
-async function api(path, opts={}){ const res = await fetch(path, { headers:{'Content-Type':'application/json'}, credentials:'include', ...opts }); if(!res.ok){ let msg=`${res.status} ${res.statusText}`; try{ const j=await res.json(); if(j.error) msg=j.error }catch{}; throw new Error(msg) } const ct=res.headers.get('content-type')||''; return ct.includes('application/json') ? res.json() : res.text() }
 
+// Reports page state
 const state = { user:null, role:'viewer', items:[], columns: ['Name','Phone','UC','PP','Locality','Address','ConfirmedVoter'] };
 
-function isTrueish(v){
-  if (v === true || v === 1) return true;
-  if (v === false || v === 0 || v === null || v === undefined) return false;
-  const s = String(v).trim().toLowerCase();
-  if (s === '' || s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
-  if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
-  return false;
-}
+// isTrueish provided by util.js
 
 function getFirst(row, keys){
   for(const k of keys){ const v = row?.[k]; if(v!==undefined && v!==null && String(v).trim()!==''){ return String(v) } }
   return ''
 }
 
+// Load current session info
 async function refreshUser(){ try{ const me=await api('/api/me'); state.user=me.user||null; state.role=me.role||'viewer' } catch { state.user=null; state.role='viewer' } }
 function renderAuth(){ const lbl=el('userLabel'); if(lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer'; const lo=el('btnLogout'); if(lo) lo.style.display = state.user ? '' : 'none'; const adm=el('linkAdmin'); if(adm) adm.style.display = (state.role==='admin')?'':'none' }
 
@@ -34,6 +26,7 @@ function buildQuery(){ const p=new URLSearchParams(); const v=(id)=> (el(id)?.va
   return p.toString();
 }
 
+// Render results table with curated columns
 function render(items){
   const thead=el('thead'); const tbody=el('tbody'); thead.innerHTML=''; tbody.innerHTML='';
   const nameKeys = ['Name','LAWYERNAME','LawyerName','Full Name','FullName','Alias'];
