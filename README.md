@@ -50,13 +50,25 @@ Security & Stability
 - SQLite PRAGMAs: WAL, NORMAL, foreign_keys ON, busy_timeout 5000
 
 Deployment (Render)
+There is a render.yaml in the repo root. You can one‑click deploy:
+
+Option A — via render.yaml
+1) In Render, New → Blueprint → Select your GitHub repo
+2) Render reads render.yaml and proposes a web service named my-app
+3) Click Apply; first deploy will build and start automatically
+   - The service uses:
+     - buildCommand: npm install
+     - startCommand: node server/index.js
+     - plan: starter, region: singapore
+     - disk: /data (5GB) mounted for the SQLite file
+4) No env vars required; the server uses PORT from the platform and defaults DATABASE_URL to /data/app.db in production
+
+Option B — manual Web Service
 1) Create a new Web Service from this repo
-2) Set Build Command: npm i
-3) Set Start Command: npm start
-4) Add Env Vars:
-   - PORT = 3000 (Render sets this; server also reads it)
-   - DATABASE_URL = ./data/app.db
-5) Add a persistent disk mounted at /data (at least 1GB). Ensure DATABASE_URL points inside or copy your DB into it on first boot.
+2) Build Command: npm install
+3) Start Command: node server/index.js
+4) Add a persistent disk mounted at /data (>=5GB)
+5) (Optional) Set DATABASE_URL=/data/app.db (defaults to this in production)
 
 Deployment (Railway)
 1) Create a new project → Deploy from GitHub
