@@ -33,6 +33,7 @@ app.use('/api', api);
 // Static serving from /ui to keep existing frontend unchanged
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+console.log('Server cwd:', process.cwd());
 console.log('Server running from:', __dirname);
 const root = path.resolve(__dirname, '..');
 const staticDir = path.join(root, 'ui');
