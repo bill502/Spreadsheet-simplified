@@ -68,6 +68,9 @@ Option B — manual Web Service
 1) Create a new Web Service from this repo
 2) Build Command: npm install
 3) Start Command: node server/index.js
+
+Entry point
+- The server entry is at server/index.js. Both package.json ("start": "node server/index.js") and render.yaml (startCommand: node server/index.js) point to this path.
 4) Add a persistent disk mounted at /data (>=5GB)
 5) (Optional) Set DATABASE_URL=/data/app.db (defaults to this in production). The server will copy ./data/app.db or ./seed/app.db into /data/app.db on first boot if the file is missing.
 
@@ -81,3 +84,4 @@ Deployment (Railway)
 Notes
 - SQLite prefers a single process instance; avoid multi-instance horizontal scaling.
 - HTTPS is handled by the platform; the server binds 0.0.0.0 and listens on PORT.
+
