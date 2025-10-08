@@ -35,7 +35,7 @@ function render(items){
   const ppKeys = ['PP','Pp'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];
   const addrKeys = ['ADDRESS','Address','HighlightedAddress'];
-  const shown=['Name','Phone','UC','PP','Locality','Address','Status','Called','CallDate','Visited','VisitDate','ConfirmedVoter'];
+  const shown=['Name','Phone','UC','PP','Locality','Address','Called','CallDate','Visited','VisitDate','ConfirmedVoter','Comments'];
   shown.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th) });
   items.forEach(row=>{
     const tr=document.createElement('tr');
@@ -49,12 +49,12 @@ function render(items){
       getFirst(row, ppKeys),
       getFirst(row, locKeys),
       getFirst(row, addrKeys),
-      row.Status || '',
       called,
       row.CallDate || '',
       visited,
       row.VisitDate || '',
-      voter
+      voter,
+      (row.Comments || '')
     ];
     cells.forEach(t=>{ const td=document.createElement('td'); td.textContent=t||''; tr.appendChild(td) });
     tbody.appendChild(tr)

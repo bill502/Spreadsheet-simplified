@@ -9,6 +9,8 @@
       .grid{ display:grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap:10px }
       #resultsPanel .content{ padding: 0 }
       #resultsPanel table thead th{ background:#1b1b1b }
+      #resultsPanel table{ table-layout: fixed }
+      #resultsPanel table th, #resultsPanel table td{ word-break: break-word; white-space: normal }
       @media print{
         @page { margin: 12mm }
         header, #quickPanel, #advancedPanel, #btnToggleAdvanced, #btnRun, #btnPrint { display:none !important }
