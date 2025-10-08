@@ -24,6 +24,9 @@ const state = {
   creating: false,
   total: 0,
   limit: 50,
+  editMode: false,
+  user: null,
+  role: 'viewer',
 };
 
 async function api(path, opts = {}) {
@@ -137,6 +140,8 @@ function renderDetails() {
   el('rowInfo').textContent = `Row ${d.rowNumber}`;
   const fields = el('fields');
   fields.innerHTML = '';
+  const canEdit = (state.role === 'editor' || state.role === 'admin');
+  const btnSave = el('btnSave'); if (btnSave) btnSave.disabled = !canEdit;
 
   // Main info (read-only) for mobile-first
   const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','Name','Full Name','FullName','Alias'];
@@ -165,33 +170,33 @@ function renderDetails() {
 
   // Called / Visited toggles with dates and ID badges
   const topRow = document.createElement('div'); topRow.className = 'row'; topRow.style.gap = '12px'; topRow.style.flexWrap = 'wrap';
-  const calledWrap = document.createElement('label'); const cbCalled = document.createElement('input'); cbCalled.type = 'checkbox'; cbCalled.checked = isTrueish(d.Called); calledWrap.append(' Called ', cbCalled);
+  const calledWrap = document.createElement('label'); const cbCalled = document.createElement('input'); cbCalled.type = 'checkbox'; cbCalled.checked = isTrueish(d.Called); cbCalled.disabled = !canEdit; calledWrap.append(' Called ', cbCalled);
   const calledDate = document.createElement('span'); calledDate.className = 'muted'; calledDate.textContent = `Date: ${d.CallDate ?? ''}`;
-  const visitedWrap = document.createElement('label'); const cbVisited = document.createElement('input'); cbVisited.type = 'checkbox'; cbVisited.checked = isTrueish(d.Visited); visitedWrap.append(' Visited ', cbVisited);
+  const visitedWrap = document.createElement('label'); const cbVisited = document.createElement('input'); cbVisited.type = 'checkbox'; cbVisited.checked = isTrueish(d.Visited); cbVisited.disabled = !canEdit; visitedWrap.append(' Visited ', cbVisited);
   const visitedDate = document.createElement('span'); visitedDate.className = 'muted'; visitedDate.textContent = `Date: ${d.VisitDate ?? ''}`;
-  const voterWrap = document.createElement('label'); const cbVoter = document.createElement('input'); cbVoter.type = 'checkbox'; cbVoter.checked = isTrueish(d.ConfirmedVoter); voterWrap.append(' Confirmed Voter ', cbVoter);
+  const voterWrap = document.createElement('label'); const cbVoter = document.createElement('input'); cbVoter.type = 'checkbox'; cbVoter.checked = isTrueish(d.ConfirmedVoter); cbVoter.disabled = !canEdit; voterWrap.append(' Confirmed Voter ', cbVoter);
   const forumInput = document.createElement('input'); forumInput.type = 'text'; forumInput.placeholder = 'Lawyer Forum'; forumInput.value = d.LawyerForum ?? '';
-  forumInput.style.minWidth = '160px'; forumInput.dataset.key = 'LawyerForum';
+  forumInput.style.minWidth = '160px'; forumInput.dataset.key = 'LawyerForum'; forumInput.readOnly = !canEdit; forumInput.disabled = !canEdit;
   const idBadge = document.createElement('span'); idBadge.className = 'muted'; idBadge.textContent = `ID: ${d.ID ?? ''}  |  New ID: ${d['new ID'] ?? ''}`;
   topRow.append(calledWrap, calledDate, visitedWrap, visitedDate, voterWrap, forumInput, idBadge);
   fields.appendChild(topRow);
 
   const todayISO = () => new Date().toLocaleDateString('en-CA');
-  cbCalled.addEventListener('change', async () => {
+  if (canEdit) cbCalled.addEventListener('change', async () => {
     try {
       const payload = { Called: cbCalled.checked ? true : false, CallDate: cbCalled.checked ? todayISO() : '' };
       const updated = await api(`/api/row/${state.selectedRowNumber}`, { method: 'POST', body: JSON.stringify(payload) });
       state.selectedData = updated; renderDetails();
     } catch(e) { toast(e.message); cbCalled.checked = !cbCalled.checked; }
   });
-  cbVisited.addEventListener('change', async () => {
+  if (canEdit) cbVisited.addEventListener('change', async () => {
     try {
       const payload = { Visited: cbVisited.checked ? true : false, VisitDate: cbVisited.checked ? todayISO() : '' };
       const updated = await api(`/api/row/${state.selectedRowNumber}`, { method: 'POST', body: JSON.stringify(payload) });
       state.selectedData = updated; renderDetails();
     } catch(e) { toast(e.message); cbVisited.checked = !cbVisited.checked; }
   });
-  cbVoter.addEventListener('change', async () => {
+  if (canEdit) cbVoter.addEventListener('change', async () => {
     try {
       const payload = { ConfirmedVoter: cbVoter.checked ? true : false };
       const updated = await api(`/api/row/${state.selectedRowNumber}`, { method: 'POST', body: JSON.stringify(payload) });
@@ -202,6 +207,7 @@ function renderDetails() {
 
   // Edit toggle
   if (!state.editMode) {
+    if (!canEdit) { return; }
     const row = document.createElement('div'); row.className='row'; row.style.marginTop='8px';
     const btn = document.createElement('button'); btn.className='ghost'; btn.textContent='Edit Info';
     btn.addEventListener('click', ()=>{ state.editMode = true; renderDetails(); });
@@ -293,6 +299,15 @@ function bind() {
   el('btnCreate').addEventListener('click', () => createEntry().catch(e => toast(e.message)));
   el('btnCancelCreate').addEventListener('click', () => hideCreateForm());
   const more = el('btnMore'); if (more) more.addEventListener('click', () => { state.limit += 50; if (el('limit')) el('limit').value = String(state.limit); doSearch().catch(e => toast(e.message)); });
+  // Auth controls
+  el('btnLogin')?.addEventListener('click', async () => {
+    const username = prompt('Username'); if (!username) return;
+    const password = prompt('Password'); if (password === null) return;
+    try { const me = await api('/api/login', { method:'POST', body: JSON.stringify({ username, password }) }); state.user = me.user; state.role = me.role || 'viewer'; renderAuth(); toast('Signed in'); } catch(e){ toast(e.message); }
+  });
+  el('btnLogout')?.addEventListener('click', async () => {
+    try { await api('/api/logout', { method:'POST' }); state.user=null; state.role='viewer'; renderAuth(); toast('Signed out'); } catch(e){ toast(e.message) }
+  });
 }
 
 (async function init() {
@@ -300,8 +315,20 @@ function bind() {
     bind();
     await loadColumns();
     const limitInput = el('limit'); if (limitInput) limitInput.value = '50';
+    await refreshUser();
+    renderAuth();
     await doSearch();
   } catch (e) {
     toast(`Init failed: ${e.message}`);
   }
 })();
+
+async function refreshUser(){
+  try { const me = await api('/api/me'); state.user = me.user || null; state.role = me.role || 'viewer'; } catch { state.user=null; state.role='viewer' }
+}
+function renderAuth(){
+  const lbl = el('userLabel'); if (lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer';
+  const login = el('btnLogin'), logout=el('btnLogout');
+  if (login && logout){ if (state.user){ login.style.display='none'; logout.style.display=''; } else { login.style.display=''; logout.style.display='none'; } }
+  const adm = document.getElementById('adminPanel'); if (adm) adm.style.display = (state.role === 'admin') ? '' : 'none';
+}

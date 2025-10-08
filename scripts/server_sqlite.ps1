@@ -31,6 +31,8 @@ function Write-Text {
 
 $global:DbConn = $null
 $global:Headers = @()
+$global:Sessions = @{}
+$global:SessionLock = New-Object object
 
 function Ensure-SqliteAssembly {
     $base = Join-Path $PSScriptRoot '..'
@@ -132,6 +134,24 @@ CREATE TABLE people (
         }
     }
     $global:Headers = (Exec-Query -Sql "PRAGMA table_info(people);").name
+    # Users table (for auth)
+    Exec-NonQuery -Sql "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)" -Params @{}
+    # Seed default admin if none
+    $uCount = Exec-Scalar -Sql "SELECT COUNT(*) FROM users" -Params @{}
+    if ([int]$uCount -eq 0) { Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES('admin','admin','admin')" -Params @{} | Out-Null }
+    # Audit table for changes
+    Exec-NonQuery -Sql @"
+CREATE TABLE IF NOT EXISTS audit (
+  id INTEGER PRIMARY KEY,
+  ts TEXT,
+  user TEXT,
+  action TEXT,
+  rowNumber INTEGER,
+  details TEXT,
+  before TEXT,
+  after TEXT
+)
+"@ -Params @{}
 }
 
 function Import-FromExcel { Param([string]$Path)
@@ -211,6 +231,30 @@ function Append-Comment { Param([int]$RowNumber,[string]$Comment)
     Update-Row -RowNumber $RowNumber -Fields @{ Comments = $val }
 }
 
+# --- Auth helpers ---
+function New-Session { Param([string]$User,[string]$Role)
+    [System.Threading.Monitor]::Enter($global:SessionLock)
+    try {
+        $sid = [guid]::NewGuid().ToString('n'); $global:Sessions[$sid] = @{ user=$User; role=$Role; created=(Get-Date) }
+        return $sid
+    }
+    finally { [System.Threading.Monitor]::Exit($global:SessionLock) }
+}
+function Get-UserFromRequest { Param($Request)
+    $cookie = $Request.Cookies['sid']; if ($cookie -and $cookie.Value) { $sid=$cookie.Value; $sess=$global:Sessions[$sid]; if($sess){ return $sess } }
+    return $null
+}
+function Role-GE { Param([string]$have,[string]$need)
+    $ord=@{ viewer=0; editor=1; admin=2 }
+    return (($ord[$have] ?? -1) -ge ($ord[$need] ?? 99))
+}
+function Require-Role { Param($Context,[string]$minRole)
+    $sess = Get-UserFromRequest -Request $Context.Request
+    if (-not $sess) { if ($minRole -eq 'viewer') { return @{ user=$null; role='viewer' } } else { Write-Json -Context $Context -Object @{ error='Unauthorized' } -StatusCode 401; return $null } }
+    if (-not (Role-GE -have $sess.role -need $minRole)) { Write-Json -Context $Context -Object @{ error='Forbidden' } -StatusCode 403; return $null }
+    return $sess
+}
+
 function Parse-Query { Param([uri]$Uri)
     $qs = $Uri.Query; if ($qs.StartsWith('?')) { $qs=$qs.Substring(1) }
     $d=@{}; if ([string]::IsNullOrEmpty($qs)) { return $d }
@@ -221,8 +265,28 @@ function Parse-Query { Param([uri]$Uri)
 function Handle-Api { Param($Context)
     $req=$Context.Request; $path=$req.Url.AbsolutePath; $method=$req.HttpMethod
     if ($path -eq '/api/health') { return (Write-Json -Context $Context -Object @{ ok = $true }) }
+    if ($path -eq '/api/login' -and $method -eq 'POST') {
+        $body = Read-BodyJson -Request $req; $u=([string]$body.username).Trim(); $p=([string]$body.password).Trim()
+        if ([string]::IsNullOrWhiteSpace($u) -or [string]::IsNullOrWhiteSpace($p)) { return (Write-Json -Context $Context -Object @{ error='Missing credentials' } -StatusCode 400) }
+        # Resilient seed: if users table exists but empty, seed admin/admin
+        $uCount = Exec-Scalar -Sql "SELECT COUNT(*) FROM users" -Params @{}
+        if ([int]$uCount -eq 0) { Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES('admin','admin','admin')" -Params @{} | Out-Null }
+        $row = Exec-Query -Sql "SELECT username, password, role FROM users WHERE username=@u" -Params @{ u=$u } | Select-Object -First 1
+        if (-not $row -or ([string]$row.password) -ne $p) { return (Write-Json -Context $Context -Object @{ error='Invalid credentials' } -StatusCode 401) }
+        $sid = New-Session -User $row.username -Role $row.role
+        $cookie = New-Object System.Net.Cookie('sid',$sid); $cookie.Path='/'; $Context.Response.Cookies.Add($cookie)
+        return (Write-Json -Context $Context -Object @{ user=$row.username; role=$row.role })
+    }
+    if ($path -eq '/api/logout' -and $method -eq 'POST') {
+        $cookie = $Context.Request.Cookies['sid']; if ($cookie) { $global:Sessions.Remove($cookie.Value) | Out-Null }
+        return (Write-Json -Context $Context -Object @{ ok=$true })
+    }
+    if ($path -eq '/api/me' -and $method -eq 'GET') {
+        $sess = Get-UserFromRequest -Request $req; return (Write-Json -Context $Context -Object @{ user=$sess.user; role=($sess.role ?? 'viewer') })
+    }
     if ($path -eq '/api/columns' -and $method -eq 'GET') { return (Write-Json -Context $Context -Object @{ columns = $global:Headers }) }
     if ($path -eq '/api/row' -and $method -eq 'POST') {
+        $sess = Require-Role -Context $Context -minRole 'editor'; if (-not $sess) { return $true }
         $body = Read-BodyJson -Request $req; if ($null -eq $body) { $body=@{} }
         $fields=@{}; foreach($p in $body.PSObject.Properties){ if($p.Name -ne 'rowNumber'){ $fields[$p.Name]=$p.Value } }
         $max=(Exec-Query -Sql "SELECT IFNULL(MAX(rowNumber),0) AS m FROM people")[0].m; $new=[int]$max+1; $fields['rowNumber']=$new
@@ -251,13 +315,40 @@ function Handle-Api { Param($Context)
     }
     if ($path -match '^/api/row/(\d+)$' -and $method -eq 'GET') { $n=[int]$Matches[1]; return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n)) }
     if ($path -match '^/api/row/(\d+)$' -and $method -eq 'POST') {
+        $sess = Require-Role -Context $Context -minRole 'editor'; if (-not $sess) { return $true }
         $n=[int]$Matches[1]; $body=Read-BodyJson -Request $req; if(-not $body){ return (Write-Json -Context $Context -Object @{ error='Empty body' } -StatusCode 400) }
         $fields=@{}; foreach($p in $body.PSObject.Properties){ if($p.Name -ne 'rowNumber'){ $fields[$p.Name]=$p.Value } }
-        Update-Row -RowNumber $n -Fields $fields; return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n))
+        # Audit: capture before and after
+        $before = Get-RowByNumber -RowNumber $n | ConvertTo-Json -Depth 2
+        Update-Row -RowNumber $n -Fields $fields
+        $after = Get-RowByNumber -RowNumber $n | ConvertTo-Json -Depth 2
+        Exec-NonQuery -Sql "INSERT INTO audit(ts,user,action,rowNumber,details,before,after) VALUES(@ts,@u,'update',@n,@d,@b,@a)" -Params @{ ts=(Get-Date).ToString('s'); u=($sess.user ?? ''); n=$n; d=($fields.Keys -join ','); b=$before; a=$after } | Out-Null
+        return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n))
     }
     if ($path -match '^/api/row/(\d+)/comment$' -and $method -eq 'POST') {
+        $sess = Require-Role -Context $Context -minRole 'editor'; if (-not $sess) { return $true }
         $n=[int]$Matches[1]; $body=Read-BodyJson -Request $req; $c=[string]$body.comment; if([string]::IsNullOrWhiteSpace($c)){ return (Write-Json -Context $Context -Object @{ error='Missing comment' } -StatusCode 400) }
-        Append-Comment -RowNumber $n -Comment $c; return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n))
+        Append-Comment -RowNumber $n -Comment ((($sess.user ?? '') -ne '') ? ("$($sess.user): $c") : $c)
+        Exec-NonQuery -Sql "INSERT INTO audit(ts,user,action,rowNumber,details) VALUES(@ts,@u,'comment',@n,@d)" -Params @{ ts=(Get-Date).ToString('s'); u=($sess.user ?? ''); n=$n; d=$c } | Out-Null
+        return (Write-Json -Context $Context -Object (Get-RowByNumber -RowNumber $n))
+    }
+    # Admin endpoints
+    if ($path -eq '/api/admin/user' -and $method -eq 'POST') {
+        $sess = Require-Role -Context $Context -minRole 'admin'; if (-not $sess) { return $true }
+        $body = Read-BodyJson -Request $req; $u=[string]$body.username; $p=[string]$body.password; $r=[string]$body.role
+        if ([string]::IsNullOrWhiteSpace($u) -or [string]::IsNullOrWhiteSpace($p) -or [string]::IsNullOrWhiteSpace($r)) { return (Write-Json -Context $Context -Object @{ error='Missing fields' } -StatusCode 400) }
+        $exists = Exec-Scalar -Sql "SELECT COUNT(*) FROM users WHERE username=@u" -Params @{ u=$u }
+        if ([int]$exists -gt 0) { Exec-NonQuery -Sql "UPDATE users SET password=@p, role=@r WHERE username=@u" -Params @{ u=$u; p=$p; r=$r } | Out-Null }
+        else { Exec-NonQuery -Sql "INSERT INTO users(username,password,role) VALUES(@u,@p,@r)" -Params @{ u=$u; p=$p; r=$r } | Out-Null }
+        return (Write-Json -Context $Context -Object @{ ok=$true })
+    }
+    if ($path -eq '/api/admin/revert' -and $method -eq 'POST') {
+        $sess = Require-Role -Context $Context -minRole 'admin'; if (-not $sess) { return $true }
+        $body = Read-BodyJson -Request $req; $from=[string]$body.from; $to=[string]$body.to
+        if ([string]::IsNullOrWhiteSpace($from) -or [string]::IsNullOrWhiteSpace($to)) { return (Write-Json -Context $Context -Object @{ error='from/to required (ISO)' } -StatusCode 400) }
+        $logs = Exec-Query -Sql "SELECT * FROM audit WHERE ts BETWEEN @f AND @t ORDER BY id DESC" -Params @{ f=$from; t=$to }
+        foreach($log in $logs){ if ($log.before) { try { $before = ($log.before | ConvertFrom-Json); $rowNum = [int]$log.rowNumber; $fields=@{}; foreach($p in $before.PSObject.Properties){ if($p.Name -ne 'rowNumber'){ $fields[$p.Name]=$p.Value } }; Update-Row -RowNumber $rowNum -Fields $fields } catch {} } }
+        return (Write-Json -Context $Context -Object @{ reverted = ($logs | Measure-Object).Count })
     }
     return $false
 }

@@ -47,7 +47,14 @@
   </head>
   <body>
     <header>
-      <strong>Spreadsheet Interface</strong>
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <strong>Spreadsheet Interface</strong>
+        <div class="row" style="gap:8px; align-items:center">
+          <span id="userLabel" class="muted">Viewer</span>
+          <button id="btnLogin" class="ghost">Sign In</button>
+          <button id="btnLogout" class="ghost" style="display:none">Sign Out</button>
+        </div>
+      </div>
     </header>
     <main>
       <div class="panel">
@@ -107,6 +114,30 @@
               <button id="btnComment">Add Comment</button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="panel" id="adminPanel" style="display:none">
+        <div class="content">
+          <h2>Admin</h2>
+          <div class="grid-fields">
+            <div class="field"><label>New Username</label><input id="admUser" type="text" placeholder="username" /></div>
+            <div class="field"><label>New Password</label><input id="admPass" type="text" placeholder="password" /></div>
+            <div class="field"><label>Role</label><input id="admRole" type="text" placeholder="viewer | editor | admin" /></div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <button id="btnCreateUser">Create/Update User</button>
+          </div>
+          <div style="height:12px"></div>
+          <h2>Revert Changes</h2>
+          <div class="grid-fields">
+            <div class="field"><label>From (ISO)</label><input id="revFrom" type="datetime-local" /></div>
+            <div class="field"><label>To (ISO)</label><input id="revTo" type="datetime-local" /></div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <button id="btnRevert">Revert</button>
+          </div>
+          <div class="muted" id="admMsg" style="margin-top:6px"></div>
         </div>
       </div>
     </main>
