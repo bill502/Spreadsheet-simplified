@@ -6,6 +6,29 @@ import path from 'node:path';
 // Default DB path: use env if provided. In production (Render/Railway), default to /data/app.db.
 const DEFAULT_DB = process.env.DATABASE_URL
   || ((process.env.RENDER || process.env.NODE_ENV === 'production') ? '/data/app.db' : path.resolve('./data/app.db'));
+
+// First-boot bootstrap: if DB path does not exist, copy from a seed in the repo if available
+try {
+  const target = DEFAULT_DB;
+  const targetDir = path.dirname(target);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+  const needsBootstrap = !fs.existsSync(target);
+  if (needsBootstrap) {
+    const candidates = [
+      path.resolve('./data/app.db'),
+      path.resolve('./seed/app.db'),
+    ];
+    const seed = candidates.find(p => fs.existsSync(p));
+    if (seed) {
+      fs.copyFileSync(seed, target);
+      console.log(`[db] Bootstrapped database: copied seed ${seed} -> ${target}`);
+    } else {
+      console.log(`[db] No seed DB found. A new database will be created at ${target}`);
+    }
+  }
+} catch (e) {
+  console.warn('[db] Bootstrap copy failed:', e?.message || e);
+}
 const dbDir = path.dirname(DEFAULT_DB);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 

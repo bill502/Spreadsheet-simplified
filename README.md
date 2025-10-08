@@ -21,11 +21,12 @@ Quick Start
 
 Configuration
 - PORT (default 3000)
-- DATABASE_URL (default ./data/app.db)
+- DATABASE_URL (default ./data/app.db locally; defaults to /data/app.db in production)
 
 DB Initialization
 - On boot, the server ensures tables for users and audit exist (idempotent), and seeds admin/admin if users is empty.
 - The people table is expected to exist (carried over from PowerShell). If missing, you can create/import as before; the server also auto-adds new columns as you post fields.
+- First-boot bootstrap: if DATABASE_URL does not exist at startup, the server will try to copy a seed DB from ./data/app.db (repo copy) or ./seed/app.db into the DATABASE_URL path. This makes Render/Railway first deploys pick up your existing DB. To use a different seed, place it in ./seed/app.db before deploying.
 
 Endpoints (selected)
 - GET /health → { ok: true }
@@ -61,14 +62,14 @@ Option A — via render.yaml
      - startCommand: node server/index.js
      - plan: starter, region: singapore
      - disk: /data (5GB) mounted for the SQLite file
-4) No env vars required; the server uses PORT from the platform and defaults DATABASE_URL to /data/app.db in production
+4) No env vars required; the server uses PORT from the platform and defaults DATABASE_URL to /data/app.db in production. On first boot, it will bootstrap by copying ./data/app.db or ./seed/app.db into /data/app.db if none exists.
 
 Option B — manual Web Service
 1) Create a new Web Service from this repo
 2) Build Command: npm install
 3) Start Command: node server/index.js
 4) Add a persistent disk mounted at /data (>=5GB)
-5) (Optional) Set DATABASE_URL=/data/app.db (defaults to this in production)
+5) (Optional) Set DATABASE_URL=/data/app.db (defaults to this in production). The server will copy ./data/app.db or ./seed/app.db into /data/app.db on first boot if the file is missing.
 
 Deployment (Railway)
 1) Create a new project → Deploy from GitHub
