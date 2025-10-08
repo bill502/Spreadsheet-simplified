@@ -1,78 +1,70 @@
-Spreadsheet Simplified — Multi‑User Editor (SQLite‑backed)
+Lawyer Voter Database — Node.js + SQLite Server
 
 Overview
+- Express server that serves the existing frontend (ui/) and exposes REST APIs equivalent to the prior PowerShell backend.
+- Uses better-sqlite3 for synchronous, simple access to the same SQLite DB (./data/app.db by default).
+- Minimal frontend changes — same /api/* shapes.
 
-- Local web UI to search, view, and update records primarily on mobile.
-- Backend uses SQLite for multi‑user safe edits; first run can import from the provided Excel.
-- Comments are timestamped; Called/Visited checkboxes set dates; LawyerForum is editable inline.
+Quick Start
+1) Install deps
+   npm i
 
-Project layout
+2) Configure env
+   cp .env.example .env
+   # Optionally edit DATABASE_URL if your DB is elsewhere
 
-- `tbl_localities.xlsx` — Source Excel (Sheet1) for initial import (optional)
-- `scripts/server_sqlite.ps1` — SQLite web API and static server (recommended)
-- `scripts/server.ps1` — Legacy Excel/COM server (original version)
-- `ui/index.html`, `ui/app.js` — Browser UI (single‑page)
-- `lib/sqlite/` — ADO.NET provider files (System.Data.SQLite.dll and SQLite.Interop.dll)
-- `data/app.db` — SQLite database file (created on first run)
+3) Run in dev
+   npm run dev
 
-Run (SQLite)
+4) Open
+   http://localhost:3000
 
-1) Prereqs
-   - Windows x64 + PowerShell 7
-   - lib/sqlite contains System.Data.SQLite.dll and SQLite.Interop.dll (x64)
-2) First run (imports Excel → SQLite):
+Configuration
+- PORT (default 3000)
+- DATABASE_URL (default ./data/app.db)
 
-   `pwsh -File .\scripts\server_sqlite.ps1 -Port 8080 -ExcelPath .\tbl_localities.xlsx`
+DB Initialization
+- On boot, the server ensures tables for users and audit exist (idempotent), and seeds admin/admin if users is empty.
+- The people table is expected to exist (carried over from PowerShell). If missing, you can create/import as before; the server also auto-adds new columns as you post fields.
 
-   This creates `data\app.db` and serves the app.
+Endpoints (selected)
+- GET /health → { ok: true }
+- GET /api/columns → { columns: [...] }
+- GET /api/search?q=&limit=&by=uc|pp|locality
+- GET /api/row/:id
+- POST /api/row (editor+)
+- POST /api/row/:id (editor+)
+- POST /api/row/:id/comment (editor+)
+- POST /api/login, POST /api/logout, GET /api/me
+- GET /api/admin/users (admin)
+- POST /api/admin/user (admin) — upsert/rename, basic validation
+- DELETE /api/admin/user/:username (admin) — prevents deletion of last admin
+- POST /api/admin/revert (admin) — revert by audit window
+- GET /api/reports (editor+) — filters for called/visited/user/modified/uc/pp/locality
 
-3) Subsequent runs (no import):
+Security & Stability
+- CORS enabled with credentials
+- morgan(tiny) logging
+- express-rate-limit with a default window
+- JSON body parsing
+- SQLite PRAGMAs: WAL, NORMAL, foreign_keys ON, busy_timeout 5000
 
-   `pwsh -File .\scripts\server_sqlite.ps1 -Port 8080`
+Deployment (Render)
+1) Create a new Web Service from this repo
+2) Set Build Command: npm i
+3) Set Start Command: npm start
+4) Add Env Vars:
+   - PORT = 3000 (Render sets this; server also reads it)
+   - DATABASE_URL = ./data/app.db
+5) Add a persistent disk mounted at /data (at least 1GB). Ensure DATABASE_URL points inside or copy your DB into it on first boot.
 
-4) Open: http://localhost:8080/
+Deployment (Railway)
+1) Create a new project → Deploy from GitHub
+2) Add Env Vars:
+   - PORT = 3000
+   - DATABASE_URL = ./data/app.db
+3) Add a persistent volume (Railway plugin) mounted at /data; place your DB there for persistence across deploys.
 
 Notes
-
-- Search scans all columns (case‑insensitive). Default limit 50; click “Show more” to load more.
-- Click a row to open Profile.
-  - Compact view shows: Name, Phone, Address, Status, PP, UC, Locality.
-  - Checkboxes: Called/Visited (auto‑dates), Confirmed Voter.
-  - LawyerForum is editable inline in compact view; Save Forum persists it.
-  - Click “Edit Info” for full field editing; Save Changes persists.
-- Comments: add a timestamped entry to the Comments field.
-
-Limitations and tips
-
-- Import reads the first worksheet. For changes after import, SQLite is the live source (not Excel).
-- Rows are identified by `rowNumber` imported from Excel used range (absolute row index).
-- For LAN access, run with `-Address http://0.0.0.0` and open firewall; only allow trusted networks.
-
-Troubleshooting
-- If POST requests fail with a Read‑BodyJson error, restart the SQLite server (script includes the parser).
-- If SQLite provider errors occur, ensure both files exist under `lib/sqlite/` and install the VC++ 2015‑2022 x64 runtime.
-
-Publish to GitHub
-
-- Ensure Git is installed and available on your PATH.
-- In a terminal at the project root, run:
-
-  `git init`
-
-  `git add .`
-
-  `git commit -m "SQLite server + mobile UI updates"`
-
-- Create a new empty repository on GitHub (no README/license). Copy its URL, e.g. `https://github.com/yourname/spreadsheet-simplified.git`.
-
-- Add remote and push:
-
-  `git branch -M main`
-
-  `git remote add origin https://github.com/yourname/spreadsheet-simplified.git`
-
-  `git push -u origin main`
-
-- If you use GitHub CLI (gh):
-
-  `gh repo create yourname/spreadsheet-simplified --source . --public --push`
+- SQLite prefers a single process instance; avoid multi-instance horizontal scaling.
+- HTTPS is handled by the platform; the server binds 0.0.0.0 and listens on PORT.
