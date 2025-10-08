@@ -1,44 +1,56 @@
-Spreadsheet simplified — multi-user editor for XLSX via PowerShell
+Spreadsheet Simplified — Multi‑User Editor (SQLite‑backed)
 
 Overview
 
-- Serves a local web UI to search, edit, and comment on rows in an Excel spreadsheet.
-- No external dependencies; uses PowerShell + Excel COM automation.
-- Stores comments in a "Comments" column (auto-added if missing) with timestamped entries.
+- Local web UI to search, view, and update records primarily on mobile.
+- Backend uses SQLite for multi‑user safe edits; first run can import from the provided Excel.
+- Comments are timestamped; Called/Visited checkboxes set dates; LawyerForum is editable inline.
 
 Project layout
 
-- `tbl_localities.xlsx` — Your spreadsheet (Sheet1 used as data source)
-- `scripts/server.ps1` — PowerShell web API and static file server
-- `ui/index.html`, `ui/app.js` — Browser UI (single-page)
+- `tbl_localities.xlsx` — Source Excel (Sheet1) for initial import (optional)
+- `scripts/server_sqlite.ps1` — SQLite web API and static server (recommended)
+- `scripts/server.ps1` — Legacy Excel/COM server (original version)
+- `ui/index.html`, `ui/app.js` — Browser UI (single‑page)
+- `lib/sqlite/` — ADO.NET provider files (System.Data.SQLite.dll and SQLite.Interop.dll)
+- `data/app.db` — SQLite database file (created on first run)
 
-Run
+Run (SQLite)
 
-1) Ensure Microsoft Excel is installed (COM automation required).
-2) Open PowerShell in the project root.
-3) Start the server:
+1) Prereqs
+   - Windows x64 + PowerShell 7
+   - lib/sqlite contains System.Data.SQLite.dll and SQLite.Interop.dll (x64)
+2) First run (imports Excel → SQLite):
 
-   `pwsh -File .\scripts\server.ps1 -Port 8080`
+   `pwsh -File .\scripts\server_sqlite.ps1 -Port 8080 -ExcelPath .\tbl_localities.xlsx`
 
-   Optional: specify a different spreadsheet:
+   This creates `data\app.db` and serves the app.
 
-   `pwsh -File .\scripts\server.ps1 -FilePath .\path\to\your.xlsx`
+3) Subsequent runs (no import):
 
-4) Open the app: http://localhost:8080/
+   `pwsh -File .\scripts\server_sqlite.ps1 -Port 8080`
+
+4) Open: http://localhost:8080/
 
 Notes
 
-- Search scans all columns (case-insensitive). Results are limited (default 100).
-- Click a row to edit its fields. Save to persist back into the Excel file.
-- Add a comment to append a timestamped entry to the `Comments` column.
-- Edits are saved immediately to the workbook on each action.
+- Search scans all columns (case‑insensitive). Default limit 50; click “Show more” to load more.
+- Click a row to open Profile.
+  - Compact view shows: Name, Phone, Address, Status, PP, UC, Locality.
+  - Checkboxes: Called/Visited (auto‑dates), Confirmed Voter.
+  - LawyerForum is editable inline in compact view; Save Forum persists it.
+  - Click “Edit Info” for full field editing; Save Changes persists.
+- Comments: add a timestamped entry to the Comments field.
 
 Limitations and tips
 
-- Uses the first worksheet in the workbook. Rename or reorder if needed.
-- Identifies rows by Excel row number; if you have a unique key column, you can search by it.
-- For multi-user access on a LAN, run the server on a machine accessible to others and adjust the `-Address` (e.g., `http://0.0.0.0`) and firewall rules. Only allow trusted access.
-- Excel COM is single-process; the server serializes access to avoid conflicts.
+- Import reads the first worksheet. For changes after import, SQLite is the live source (not Excel).
+- Rows are identified by `rowNumber` imported from Excel used range (absolute row index).
+- For LAN access, run with `-Address http://0.0.0.0` and open firewall; only allow trusted networks.
+
+Troubleshooting
+- If POST requests fail with a Read‑BodyJson error, restart the SQLite server (script includes the parser).
+- If SQLite provider errors occur, ensure both files exist under `lib/sqlite/` and install the VC++ 2015‑2022 x64 runtime.
 
 Publish to GitHub
 
@@ -49,7 +61,7 @@ Publish to GitHub
 
   `git add .`
 
-  `git commit -m "Initial commit: PowerShell server + UI"`
+  `git commit -m "SQLite server + mobile UI updates"`
 
 - Create a new empty repository on GitHub (no README/license). Copy its URL, e.g. `https://github.com/yourname/spreadsheet-simplified.git`.
 

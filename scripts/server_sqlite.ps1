@@ -94,13 +94,19 @@ function Close-Db { if ($global:DbConn) { $global:DbConn.Close(); $global:DbConn
 function Exec-NonQuery { Param([string]$Sql,[hashtable]$Params)
     $cmd = $global:DbConn.CreateCommand(); $cmd.CommandText=$Sql
     if ($Params){ foreach($k in $Params.Keys){ $p=$cmd.CreateParameter(); $p.ParameterName='@'+$k; $p.Value=$Params[$k]; [void]$cmd.Parameters.Add($p) } }
-    [void]$cmd.ExecuteNonQuery()
+    return $cmd.ExecuteNonQuery()
 }
 
 function Exec-Query { Param([string]$Sql,[hashtable]$Params)
     $cmd = $global:DbConn.CreateCommand(); $cmd.CommandText=$Sql
     if ($Params){ foreach($k in $Params.Keys){ $p=$cmd.CreateParameter(); $p.ParameterName='@'+$k; $p.Value=$Params[$k]; [void]$cmd.Parameters.Add($p) } }
     $r=$cmd.ExecuteReader(); $out=@(); while($r.Read()){ $row=[ordered]@{}; for($i=0;$i -lt $r.FieldCount;$i++){ $row[$r.GetName($i)]=$r.GetValue($i) }; $out+=[pscustomobject]$row }; $r.Close(); return ,$out
+}
+
+function Exec-Scalar { Param([string]$Sql,[hashtable]$Params)
+    $cmd = $global:DbConn.CreateCommand(); $cmd.CommandText=$Sql
+    if ($Params){ foreach($k in $Params.Keys){ $p=$cmd.CreateParameter(); $p.ParameterName='@'+$k; $p.Value=$Params[$k]; [void]$cmd.Parameters.Add($p) } }
+    return $cmd.ExecuteScalar()
 }
 
 function Table-Exists { Param([string]$Name) return ((Exec-Query -Sql "SELECT name FROM sqlite_master WHERE type='table' AND name=@n" -Params @{ n=$Name }).Count -gt 0) }
@@ -159,11 +165,42 @@ function Import-FromExcel { Param([string]$Path)
 }
 
 function Get-RowByNumber { Param([int]$RowNumber) $r = Exec-Query -Sql "SELECT * FROM people WHERE rowNumber=@n" -Params @{ n=$RowNumber }; if($r.Count){ return $r[0] } else { return @{ rowNumber=$RowNumber } } }
+function Normalize-FieldValue {
+    Param([string]$Name,[object]$Value)
+    if ($null -eq $Value) { return $null }
+    switch -regex ($Name) {
+        '^(Called|Visited|ConfirmedVoter)$' {
+            if ($Value -is [bool]) { return ([int]$Value) }
+            $s = [string]$Value; $s = $s.ToLower().Trim();
+            return ( @('1','true','yes','y','on') -contains $s ) ? 1 : 0
+        }
+        default { return $Value }
+    }
+}
+
 function Update-Row { Param([int]$RowNumber,[hashtable]$Fields)
     if (-not $Fields -or $Fields.Keys.Count -eq 0) { return }
-    foreach($k in $Fields.Keys){ if ($global:Headers -notcontains $k) { $safe=$k.Replace(']',']]'); Exec-NonQuery -Sql ("ALTER TABLE people ADD COLUMN ["+$safe+"] TEXT"); $global:Headers += $k } }
-    $sets=@(); $params=@{ n=$RowNumber }; foreach($k in $Fields.Keys){ $pn='p_'+([Math]::Abs($k.GetHashCode())); $sets+="[${k}]=@${pn}"; $params[$pn]=$Fields[$k] }
-    Exec-NonQuery -Sql ("UPDATE people SET "+($sets -join ', ')+" WHERE rowNumber=@n") -Params $params
+    # Ensure columns exist
+    foreach($k in $Fields.Keys){ if ($global:Headers -notcontains $k) { $safe=$k.Replace(']',']]'); Exec-NonQuery -Sql ("ALTER TABLE people ADD COLUMN ["+$safe+"] TEXT") | Out-Null; $global:Headers += $k } }
+    # Build UPDATE
+    $sets=@(); $params=@{ n=$RowNumber }
+    foreach($k in $Fields.Keys){
+        $safe = $k.Replace(']',']]')
+        $pn='p_'+([Math]::Abs($k.GetHashCode()));
+        $sets+="[${safe}]=@${pn}"
+        $params[$pn] = (Normalize-FieldValue -Name $k -Value $Fields[$k])
+    }
+    $rows = Exec-NonQuery -Sql ("UPDATE people SET "+($sets -join ', ')+" WHERE rowNumber=@n") -Params $params
+    if ($rows -eq 0) {
+        # If no row updated, insert a new one with provided fields
+        $all = @('rowNumber') + @($Fields.Keys)
+        $cols = ($all | ForEach-Object { '['+($_.Replace(']',']]'))+']' }) -join ','
+        $ph = @('@rn') + (@($Fields.Keys | ForEach-Object { '@i_'+([Math]::Abs($_.GetHashCode())) }))
+        $sql = "INSERT INTO people ($cols) VALUES (" + ($ph -join ',') + ")"
+        $p2 = @{ rn = $RowNumber }
+        foreach($k in $Fields.Keys){ $p2['i_'+([Math]::Abs($k.GetHashCode()))] = (Normalize-FieldValue -Name $k -Value $Fields[$k]) }
+        Exec-NonQuery -Sql $sql -Params $p2 | Out-Null
+    }
 }
 function Append-Comment { Param([int]$RowNumber,[string]$Comment)
     if ([string]::IsNullOrWhiteSpace($Comment)) { return }

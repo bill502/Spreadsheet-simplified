@@ -6,36 +6,41 @@
     <title>Spreadsheet Interface</title>
     <style>
       :root{
-        --bg:#2b2f36; --panel:#343a46; --border:#454c59; --text:#e6e8eb; --sub:#9aa3b2; --accent:#4f46e5; --accent-2:#64748b;
-        --input:#2b2f36; --hover:#3a404d;
+        --bg:#12141a; --panel:#1b1f2a; --border:#2a3140; --text:#e6e8eb; --sub:#a2aabc; --accent:#4f46e5; --accent-2:#556581;
+        --input:#141823; --hover:#242a36;
       }
       *{box-sizing:border-box}
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
-      header { padding: 12px 16px; background: #232730; color: var(--text); border-bottom:1px solid var(--border); }
-      main { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; margin: 0 auto; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); line-height:1.4 }
+      header { position:sticky; top:0; z-index:30; padding: 12px 16px; background: #151a23; color: var(--text); border-bottom:1px solid var(--border); backdrop-filter:saturate(1.2) blur(2px) }
+      main { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 1100px; margin: 0 auto; }
       .toolbar { display:flex; gap:8px; align-items:center; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
       .panel .content { padding: 12px; }
-      h2 { font-size: 14px; margin: 0 0 8px; color: var(--sub); font-weight:600 }
-      input[type="text"], input[type="number"], textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input); color: var(--text); }
-      button { padding: 8px 12px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; cursor: pointer; }
+      h2 { font-size: 14px; margin: 0 0 8px; color: var(--sub); font-weight:600; letter-spacing:.2px }
+      input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--input); color: var(--text); outline: none; }
+      input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #4f46e533 }
+      button { padding: 10px 14px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 10px; cursor: pointer; }
       button.secondary { border-color: var(--accent-2); background: var(--accent-2); }
       button.ghost { background: transparent; border-color: var(--border); color: var(--text); }
       button:hover{ filter:brightness(1.05) }
       table { width: 100%; border-collapse: collapse; }
-      th, td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px; }
-      tr:hover { background: var(--hover); }
+      th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px; }
+      thead th { position: sticky; top: 0; background: #161a25; z-index: 1 }
+      tr:hover { background: var(--hover); transition: background .15s ease }
       .muted { color: var(--sub); font-size: 12px; }
       .grid-fields { display: grid; grid-template-columns: 1fr; gap: 8px; }
-      .field { display: grid; grid-template-columns: 160px 1fr; gap: 8px; align-items: center; }
+      .field { display: grid; grid-template-columns: 160px 1fr; gap: 10px; align-items: center; }
       .row { display:flex; gap:8px; align-items:center }
       .spacer { flex:1 }
+      #loading { display:none; color: var(--sub) }
+      .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:10px; padding:10px 12px; box-shadow:0 8px 30px rgba(0,0,0,.35); z-index:50; display:none; max-width: 92vw }
+      .kpi { display:inline-block; padding:2px 8px; background:#101522; border:1px solid var(--border); border-radius:999px; font-size:12px; color:#9fb1d0 }
       @media (max-width: 640px) {
         main { padding: 8px; gap: 10px; }
         .toolbar { flex-wrap: wrap; gap: 6px; }
-        .toolbar input, .toolbar button { flex: 1 1 100%; }
-        button { padding: 12px 14px; border-radius: 10px; }
-        th, td { padding: 10px; font-size: 14px; }
+        .toolbar input, .toolbar button { flex: 1 1 100%; min-width: 44px }
+        button { padding: 12px 14px; border-radius: 12px; }
+        th, td { padding: 12px; font-size: 14px; }
         h2 { font-size: 16px; }
       }
     </style>
@@ -54,8 +59,10 @@
             <span class="spacer"></span>
             <button class="ghost" id="btnNew">New Entry</button>
           </div>
-          <div class="muted" id="resultMeta" style="margin-top:6px"></div>
-          <div class="muted" id="loading" style="display:none; margin-top:6px">Searching…</div>
+          <div class="row" style="justify-content:space-between; align-items:center; margin-top:6px">
+            <div class="muted" id="resultMeta"></div>
+            <div id="loading" class="kpi">Searching…</div>
+          </div>
         </div>
       </div>
 
@@ -103,6 +110,7 @@
         </div>
       </div>
     </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
   </body>
   </html>
