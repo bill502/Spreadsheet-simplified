@@ -1,14 +1,14 @@
 /* Unified Spotify-inspired dark theme and shared layout/styles */
 :root {
-  --bg: #121212;           /* app background */
-  --panel: #1c1f24;        /* cards/panels: lighter than bg for contrast */
-  --border: #3a3a3a;       /* clearer borders */
-  --text: #e6e6e6;
-  --sub: #b3b3b3;
+  --bg: #121212;           /* app background (neutral) */
+  --panel: #1a1a1a;        /* neutral grey panel */
+  --border: #2e2e2e;       /* neutral border */
+  --text: #e8e8e8;         /* near-white */
+  --sub: #b8b8b8;          /* muted text */
   --accent: #1DB954;       /* Spotify green */
   --accent-2: #1ed760;     /* lighter green */
-  --input: #161616;        /* inputs slightly lighter than bg */
-  --hover: #232323;        /* hover contrast */
+  --input: #141414;        /* neutral input */
+  --hover: #1f1f1f;        /* neutral hover */
   --danger: #ef4444;
 }
 
@@ -37,7 +37,7 @@ main { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-widt
 .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap }
 .spacer { flex: 1 }
 
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03) }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.025) }
 .panel .content { padding: 12px }
 
 h2 { font-size: 14px; margin: 0 0 8px; color: var(--sub); font-weight: 600; letter-spacing: .2px }
@@ -54,9 +54,9 @@ button:hover, .btn:hover, a.ghost:hover { filter: brightness(1.05) }
 
 table { width: 100%; border-collapse: collapse }
 th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 13px }
-thead th { position: sticky; top: 0; background: #202020; z-index: 1 }
+thead th { position: sticky; top: 0; background: #1d1d1d; z-index: 1 }
 tr:hover { background: var(--hover); transition: background .15s ease }
-tbody tr:nth-child(even) { background: #171717 }
+tbody tr:nth-child(even) { background: #151515 }
 
 .muted { color: var(--sub); font-size: 12px }
 .grid-fields { display: grid; grid-template-columns: 1fr; gap: 8px }

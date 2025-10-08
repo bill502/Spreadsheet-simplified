@@ -231,7 +231,7 @@ function showCreateForm() {
   const wrap = el('createFields');
   wrap.innerHTML = '';
   // Show inputs for all columns except rowNumber and Comments
-  const keys = state.columns.filter(k => k && k !== 'Comments');
+  const keys = state.columns.filter(k => k && k !== 'Comments' && k !== 'rowNumber');
   keys.forEach(k => {
     const div = document.createElement('div'); div.className = 'field';
     const label = document.createElement('label'); label.textContent = k;
