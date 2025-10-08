@@ -35,19 +35,27 @@ try {
 const dbDir = path.dirname(DEFAULT_DB);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
-// If DB exists but lacks 'people' and a seed is available, replace it before opening main connection
+// If DB exists but lacks 'people' OR 'people' is empty and a seed is available, replace it before opening main connection
 try {
   if (fs.existsSync(DEFAULT_DB)) {
     let needsReplace = false; let tmp;
     try {
       tmp = new Database(DEFAULT_DB, { fileMustExist: false });
       const row = tmp.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='people'").get();
-      if (!row) needsReplace = true;
+      if (!row) {
+        needsReplace = true;
+      } else {
+        try {
+          const cnt = tmp.prepare('SELECT COUNT(*) AS c FROM people').get().c;
+          console.log(`[db] Existing DB has people rows: ${cnt}`);
+          if (Number(cnt) === 0) needsReplace = true;
+        } catch { needsReplace = true }
+      }
     } catch { needsReplace = true } finally { try { tmp?.close() } catch {} }
     if (needsReplace) {
       const candidates = [path.resolve('./seed/app.db'), path.resolve('./data/app.db')];
       const seed = candidates.find(p => fs.existsSync(p));
-      if (seed) { fs.copyFileSync(seed, DEFAULT_DB); console.log(`[db] Replaced empty DB with seed ${seed} -> ${DEFAULT_DB}`) }
+      if (seed) { fs.copyFileSync(seed, DEFAULT_DB); console.log(`[db] Replaced DB with seed ${seed} -> ${DEFAULT_DB}`) }
     }
   }
 } catch (e) { console.warn('[db] Seed replacement check failed:', e?.message || e) }
