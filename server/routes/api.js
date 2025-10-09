@@ -1,7 +1,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import cookie from 'cookie';
-// crypto import removed (no XLSX checksum functionality)
+import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
 // No path/url imports needed; XLSX flow removed
 
