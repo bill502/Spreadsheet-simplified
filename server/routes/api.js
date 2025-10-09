@@ -346,11 +346,13 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
-  const query = () => q
-    ? db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`)
-    : db.prepare('SELECT id, name, alias, pp, uc FROM localities ORDER BY name LIMIT 2000').all();
+  const query = () => (
+    q
+      ? db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`)
+      : db.prepare('SELECT id, name, alias, pp, uc FROM localities ORDER BY name LIMIT 2000').all()
+  );
   let items = [];
-  try { items = query() } catch {}
+  try { items = query(); } catch {}
   if (!items || items.length === 0) {
     // Attempt on-demand seed from people if available
     try {
@@ -361,7 +363,7 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
         const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
         for (const r of list) { ins.run(String(r.name).trim(), '', sanitize(r.pp), sanitize(r.uc)) }
       });
-      if (rows && rows.length) { tx(rows) }
+      if (rows && rows.length) { tx(rows); }
       items = query();
     } catch {}
   }
