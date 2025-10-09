@@ -346,6 +346,10 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
+
+// Localities list (with on-demand seeding)
+router.get('/localities', (req, res) => {
+  const q = (req.query.q || '').toString().trim().toLowerCase();
   const query = () => (
     q
       ? db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`)
