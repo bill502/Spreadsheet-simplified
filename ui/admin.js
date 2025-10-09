@@ -7,7 +7,7 @@ const state = { user:null, role:'viewer', users:[], editing:null };
 async function refreshUser(){ try{ const me=await api('/api/me'); state.user=me.user||null; state.role=me.role||'viewer' } catch { state.user=null; state.role='viewer' } }
 function renderAuth(){ const lbl=el('userLabel'); if(lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer'; const lo=el('btnLogout'); if(lo) lo.style.display = state.user ? '' : 'none' }
 
-async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; el('usersPanel').style.display = isAdmin ? 'block' : 'none'; el('managePanel').style.display = isAdmin ? 'block' : 'none'; el('revertPanel').style.display = isAdmin ? 'block' : 'none'; return isAdmin }
+async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['usersPanel','managePanel','revertPanel','importPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = isAdmin ? 'block' : 'none' }); return isAdmin }
 
 // Fetch users from server and render table
 async function loadUsers(){ const data = await api('/api/admin/users'); state.users = data.users || []; renderUsers() }
@@ -36,6 +36,22 @@ function bind(){
     try { const res = await api('/api/admin/import',{ method:'POST', body: JSON.stringify({ path: p })}); el('impMsg').textContent = `Imported ${res.count} rows (${res.sheet})`; toast('Import complete'); }
     catch(e){ toast(e.message) }
   });
+  // Localities
+  el('btnLocRefresh')?.addEventListener('click', ()=> loadLocalities().catch(e=>toast(e.message)));
+  el('btnLocSearch')?.addEventListener('click', ()=> loadLocalities((el('locSearch')?.value||'').trim()).catch(e=>toast(e.message)));
+  el('btnLocSave')?.addEventListener('click', ()=> saveLocality().catch(e=>toast(e.message)));
+  el('btnLocClear')?.addEventListener('click', ()=> clearLocForm());
+  el('btnLocImport')?.addEventListener('click', async ()=>{
+    const p = (el('impPath')?.value || '').trim(); if(!p){ toast('Enter Excel path in Import Excel above'); return }
+    try { const res = await api('/api/admin/localities/import',{ method:'POST', body: JSON.stringify({ path: p })}); el('locMsg').textContent = `Rebuilt ${res.imported ?? 0} localities from ${res.sheet}`; toast('Localities imported'); await loadLocalities(); }
+    catch(e){ toast(e.message) }
+  });
 }
 
-(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ await loadUsers() } } catch(e){ toast(`Init failed: ${e.message}`) } })();
+(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ await loadUsers(); await loadLocalities(); } } catch(e){ toast(`Init failed: ${e.message}`) } })();
+
+// Localities admin: list, save, delete
+async function loadLocalities(q){ const params = q ? ('?q='+encodeURIComponent(q)) : ''; const data = await api('/api/localities'+params); const items = data.items||[]; const tbody = el('locBody'); tbody.innerHTML=''; items.forEach(loc=>{ const tr=document.createElement('tr'); const t1=document.createElement('td'); t1.textContent=loc.name; const t2=document.createElement('td'); t2.textContent=loc.alias||''; const t3=document.createElement('td'); t3.textContent=loc.pp||''; const t4=document.createElement('td'); t4.textContent=loc.uc||''; const t5=document.createElement('td'); const bE=document.createElement('button'); bE.className='ghost'; bE.textContent='Edit'; bE.addEventListener('click',()=>{ el('locName').value=loc.name; el('locAlias').value=loc.alias||''; el('locPP').value=loc.pp||''; el('locUC').value=loc.uc||''; }); const bD=document.createElement('button'); bD.className='ghost'; bD.textContent='Delete'; bD.addEventListener('click', async ()=>{ if(!confirm(`Delete locality '${loc.name}'?`)) return; try{ await api('/api/admin/locality/'+encodeURIComponent(loc.name),{ method:'DELETE' }); toast('Locality deleted'); await loadLocalities(q) } catch(e){ toast(e.message) } }); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(bE,bD); t5.append(actions); tr.append(t1,t2,t3,t4,t5); tbody.appendChild(tr) }) }
+
+async function saveLocality(){ const name=(el('locName')?.value||'').trim(); if(!name){ toast('Name required'); return } const alias=(el('locAlias')?.value||'').trim(); const pp=(el('locPP')?.value||'').trim(); const uc=(el('locUC')?.value||'').trim(); await api('/api/admin/locality',{ method:'POST', body: JSON.stringify({ name, alias, pp, uc })}); toast('Locality saved'); await loadLocalities() }
+function clearLocForm(){ ['locName','locAlias','locPP','locUC'].forEach(id=>{ const n=el(id); if(n) n.value='' }); }

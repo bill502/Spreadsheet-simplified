@@ -6,7 +6,7 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 
-import { initDb, runMigrations } from './db.js';
+import db, { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
 
 dotenv.config();
@@ -14,6 +14,22 @@ initDb();
 try {
   runMigrations();
 } catch {}
+
+// Seed localities from existing people if localities table is empty
+try {
+  db.exec('CREATE TABLE IF NOT EXISTS localities (id INTEGER PRIMARY KEY, name TEXT UNIQUE, alias TEXT, pp TEXT, uc TEXT)');
+  const c = db.prepare("SELECT COUNT(*) AS c FROM localities").get().c;
+  if (Number(c) === 0) {
+    const sanitize = (v) => { if (v==null) return ''; if (typeof v==='number') return String(Math.trunc(v)); const s=String(v).trim(); return s.includes('.')? s.split('.')[0] : s };
+    const rows = db.prepare("SELECT DISTINCT [LocalityName] AS name, [PP] AS pp, [UC] AS uc FROM people WHERE [LocalityName] IS NOT NULL AND TRIM([LocalityName])<>''").all();
+    const tx = db.transaction((list)=>{
+      const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
+      for (const r of list) { ins.run(String(r.name).trim(), '', sanitize(r.pp), sanitize(r.uc)) }
+    });
+    tx(rows);
+    console.log(`[db] Seeded localities from people: ${rows.length}`);
+  }
+} catch (e) { console.warn('[db] Localities seed check failed:', e?.message || e) }
 
 const app = express();
 
