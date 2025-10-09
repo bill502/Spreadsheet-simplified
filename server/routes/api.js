@@ -76,6 +76,9 @@ function formatOutRow(row){
   return r;
 }
 
+// Ensure PP/UC are integer-like strings (no decimals)
+function sanitizePPUC(v){ if(v==null) return ''; if(typeof v==='number') return String(Math.trunc(v)); const s=String(v).trim(); return s.includes('.')? s.split('.')[0] : s }
+
 // Routes
 router.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -89,9 +92,31 @@ router.get('/search', (req, res) => {
   const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit || '100', 10)));
   const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
   const by = (req.query.by || '').toString().trim();
+  const sort = (req.query.sort || '').toString().trim().toLowerCase();
+  const desc = String(req.query.desc || '').toLowerCase() === 'true';
   const cols = getColumns();
+
+  const pickOrderColumn = () => {
+    // Whitelist mapping to actual columns if present
+    const candidates = [];
+    if (sort === 'last_name') candidates.push('LastName');
+    if (sort === 'first_name') candidates.push('FirstName');
+    if (sort === 'email') candidates.push('Email');
+    if (sort === 'name' || sort === 'lawyername') candidates.push('LAWYERNAME', 'LawyerName', 'Name');
+    // Defaults by presence
+    candidates.push('LAWYERNAME', 'LawyerName', 'Name');
+    // Fallback
+    candidates.push('rowNumber');
+    const found = candidates.find(c => cols.includes(c));
+    return found || 'rowNumber';
+  };
+  const orderCol = pickOrderColumn();
+  const isRowNum = orderCol === 'rowNumber';
+  const orderExpr = isRowNum ? '[rowNumber]' : `[${orderCol.replace(']', ']]')}] COLLATE NOCASE`;
+  const dir = desc ? 'DESC' : 'ASC';
+
   if (!q) {
-    const itemsRaw = db.prepare('SELECT * FROM people ORDER BY rowNumber LIMIT ? OFFSET ?').all(limit, offset);
+    const itemsRaw = db.prepare(`SELECT * FROM people ORDER BY ${orderExpr} ${dir} LIMIT ? OFFSET ?`).all(limit, offset);
     const items = itemsRaw.map(formatOutRow);
     const total = db.prepare('SELECT COUNT(*) AS c FROM people').get().c;
     return res.json({ total, items });
@@ -106,7 +131,7 @@ router.get('/search', (req, res) => {
     return res.json({ total: 0, items: [] });
   }
   const conds = likeCols.map(c => `[${c}] LIKE @pat`).join(' OR ');
-  const itemsRaw = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY rowNumber LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
+  const itemsRaw = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY ${orderExpr} ${dir} LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
   const total = db.prepare(`SELECT COUNT(*) AS c FROM people WHERE ${conds}`).get({ pat: `%${q}%` }).c;
   const items = itemsRaw.map(formatOutRow);
   return res.json({ total, items });
@@ -333,7 +358,20 @@ router.get('/reports', requireRole('editor'), (req, res) => {
 export default router;
 // Debug routes (guarded)
 function debugGuard(req, res, next){
+  // Allow unrestricted in non-production
   if (process.env.NODE_ENV !== 'production') return next();
+  // Allow admin session
+  try {
+    const raw = req.headers.cookie || '';
+    const parsed = cookie.parse(raw || '');
+    const sid = parsed.sid;
+    // sessions map is in this module scope
+    if (sid && sessions.has(sid)) {
+      const sess = sessions.get(sid);
+      if (sess && (sess.role === 'admin')) return next();
+    }
+  } catch {}
+  // Or allow with debug token header
   const t = req.get('X-Debug-Token');
   if (t && process.env.DEBUG_TOKEN && t === process.env.DEBUG_TOKEN) return next();
   return res.status(403).json({ error: 'Forbidden' });
@@ -358,6 +396,28 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
       try { const c = db.prepare(`SELECT COUNT(*) AS c FROM [${n.replace(']',']]')}]`).get().c; return { name: n, count: c } } catch { return { name: n, count: null } }
     });
     return res.json({ tables: list });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+// Debug XLSX info (admin or debug token)
+router.get('/_debug/xlsx', debugGuard, (req, res) => {
+  try {
+    const p = '/data/tbl_localities.xlsx';
+    let exists = false, sizeBytes = 0, sha256 = null;
+    try {
+      const st = fs.statSync(p);
+      exists = st.isFile();
+      sizeBytes = st.size;
+      if (exists) {
+        const h = crypto.createHash('sha256');
+        const buf = fs.readFileSync(p);
+        h.update(buf);
+        sha256 = h.digest('hex');
+      }
+    } catch {}
+    return res.json({ path: p, exists, sizeBytes, sha256 });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }
@@ -417,22 +477,52 @@ router.post('/admin/rebuild-preserve', requireRole('admin'), async (req, res) =>
     if (requested) candidates.push(requested);
     candidates.push('/data/tbl_localities.xlsx');
     candidates.push('./tbl_localities.xlsx');
-    candidates.push(require('node:path').join(cwd, 'tbl_localities.xlsx'));
-    candidates.push(require('node:path').join(cwd, 'data', 'tbl_localities.xlsx'));
+    candidates.push(path.join(cwd, 'tbl_localities.xlsx'));
+    candidates.push(path.join(cwd, 'data', 'tbl_localities.xlsx'));
     const found = candidates.find(p => { try { return fs.existsSync(p) } catch { return false } });
     if (!found) {
       return res.status(404).json({ error: 'xlsx not found', tried: candidates });
     }
+    console.log('[rebuild] Using spreadsheet:', found);
     const mod = await import('../tools/rebuild_from_xlsx_preserve_recent.js');
     const func = mod.runRebuild || mod.default;
     if (typeof func !== 'function') return res.status(500).json({ error: 'rebuild function not available' });
-    await func(found);
+    const result = await func(found);
     // Best-effort copy into /data for future runs
     try {
       const dest = '/data/tbl_localities.xlsx';
       if (found !== dest) { fs.copyFileSync(found, dest) }
     } catch {}
-    return res.json({ ok: true, path: found });
+    // Compute checksum/size
+    let sizeBytes = 0; let sha256 = null;
+    try {
+      const st = fs.statSync(found); sizeBytes = st.size;
+      const h = crypto.createHash('sha256');
+      const buf = fs.readFileSync(found); h.update(buf); sha256 = h.digest('hex');
+    } catch {}
+    return res.json({ ok: true, path: found, sizeBytes, sha256, ...result });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
+// Admin-only upload/replace XLSX on persistent disk using base64 body
+router.post('/admin/upload-xlsx', requireRole('admin'), (req, res) => {
+  try {
+    const b = req.body || {};
+    const dataB64 = (b.data || '').toString();
+    const expectSha = (b.sha256 || '').toString().trim().toLowerCase();
+    if (!dataB64) return res.status(400).json({ error: 'Missing data (base64)' });
+    const buf = Buffer.from(dataB64, 'base64');
+    if (buf.length < 1000) return res.status(400).json({ error: 'File too small' });
+    const hash = crypto.createHash('sha256').update(buf).digest('hex');
+    if (expectSha && expectSha !== hash) return res.status(400).json({ error: 'Checksum mismatch', got: hash });
+    const dest = '/data/tbl_localities.xlsx';
+    const tmp = dest + '.tmp';
+    fs.mkdirSync('/data', { recursive: true });
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, dest);
+    return res.json({ ok: true, path: dest, sizeBytes: buf.length, sha256: hash });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }

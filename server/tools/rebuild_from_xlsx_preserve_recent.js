@@ -55,6 +55,9 @@ export async function runRebuild(xlsxPath){
   try {
     createPeopleNew(cols);
     let rn = 0;
+    let preservedCount = 0;
+    let importedCount = 0;
+    const sample = [];
     for(const [name, xr] of xmap){
       rn++;
       if (preserveByName.has(name)){
@@ -62,10 +65,35 @@ export async function runRebuild(xlsxPath){
         const rec = {};
         for(const c of cols){ if(c==='rowNumber') continue; if(dr[c]!==undefined){ let v=dr[c]; if(c==='PP'||c==='UC') v=sanitizePPUC(v); rec[c] = v==null? '' : String(v) } }
         insertRow(cols, rn, rec);
+        preservedCount++;
+        if (sample.length < 5) {
+          sample.push({
+            name,
+            rowNumberBefore: dr.rowNumber,
+            rowNumberAfter: rn,
+            before: {
+              Called: dr.Called ?? null,
+              CallDate: dr.CallDate ?? null,
+              Visited: dr.Visited ?? null,
+              VisitDate: dr.VisitDate ?? null,
+              ConfirmedVoter: dr.ConfirmedVoter ?? null,
+              LawyerForum: dr.LawyerForum ?? null,
+            },
+            after: {
+              Called: rec.Called ?? null,
+              CallDate: rec.CallDate ?? null,
+              Visited: rec.Visited ?? null,
+              VisitDate: rec.VisitDate ?? null,
+              ConfirmedVoter: rec.ConfirmedVoter ?? null,
+              LawyerForum: rec.LawyerForum ?? null,
+            }
+          });
+        }
       } else {
         const rec = {};
         for(const c of cols){ if(c==='rowNumber') continue; if(xr[c]!==undefined){ let v=xr[c]; if(c==='PP'||c==='UC') v=sanitizePPUC(v); rec[c] = v==null? '' : String(v) } }
         insertRow(cols, rn, rec);
+        importedCount++;
       }
     }
     // Swap tables
@@ -76,7 +104,9 @@ export async function runRebuild(xlsxPath){
     try { db.exec("CREATE INDEX IF NOT EXISTS idx_people_pp ON people([PP])") } catch {}
     try { db.exec("CREATE INDEX IF NOT EXISTS idx_people_locality ON people([LocalityName])") } catch {}
     db.exec('COMMIT');
-    console.log(`Rebuild complete. New people rows: ${xmap.size}`);
+    const totalAfter = db.prepare('SELECT COUNT(*) AS c FROM people').get().c;
+    console.log(`Rebuild complete. New people rows: ${xmap.size}. Preserved: ${preservedCount}, Imported: ${importedCount}`);
+    return { rowsInXlsx: xmap.size, preservedCount, importedCount, totalAfter, sample };
   } catch (e) {
     try { db.exec('ROLLBACK') } catch {}
     throw e;
