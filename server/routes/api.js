@@ -4,6 +4,7 @@ import cookie from 'cookie';
 import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const router = express.Router();
 
@@ -405,4 +406,18 @@ router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
   const name = decodeURIComponent(req.params.name||'');
   const x = db.prepare('DELETE FROM localities WHERE name = ?').run(name);
   return res.json({ ok: true, deleted: x.changes });
+});
+
+// Admin-only: rebuild DB from xlsx while preserving recent contact edits since cutoff
+router.post('/admin/rebuild-preserve', requireRole('admin'), async (req, res) => {
+  try {
+    const p = (req.body?.path || './tbl_localities.xlsx').toString();
+    const mod = await import('../tools/rebuild_from_xlsx_preserve_recent.js');
+    const func = mod.runRebuild || mod.default;
+    if (typeof func !== 'function') return res.status(500).json({ error: 'rebuild function not available' });
+    await func(p);
+    return res.json({ ok: true, path: p });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
 });
