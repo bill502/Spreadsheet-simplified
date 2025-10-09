@@ -3,9 +3,7 @@ import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
-import multer from 'multer';
 import path from 'node:path';
-import XLSX from 'xlsx';
 
 const router = express.Router();
 
