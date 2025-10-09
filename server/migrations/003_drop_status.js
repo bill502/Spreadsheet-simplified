@@ -9,13 +9,13 @@ export default function(db){
 
   const cols = info.filter(r => String(r.name) !== 'Status');
   const colDefs = cols.map(r => {
-    const name = `[${String(r.name).replace(']','']')}]`;
+    const name = `[${String(r.name).replace(']', ']]')}]`;
     const type = r.type && String(r.type).trim() ? String(r.type).trim() : 'TEXT';
     const pk = (r.pk === 1) ? ' PRIMARY KEY' : '';
     return `${name} ${type}${pk}`;
   }).join(', ');
 
-  const colNames = cols.map(r => `[${String(r.name).replace(']','']')}]`).join(', ');
+  const colNames = cols.map(r => `[${String(r.name).replace(']', ']]')}]`).join(', ');
 
   db.exec('BEGIN');
   try {
@@ -33,4 +33,3 @@ export default function(db){
     throw e;
   }
 }
-
