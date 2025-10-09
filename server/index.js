@@ -4,7 +4,6 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 
@@ -55,57 +54,7 @@ try {
   }
 } catch (e) { console.warn('[db] Localities seed check failed:', e?.message || e) }
 
-// Auto-apply spreadsheet on boot (hands-off):
-// - Prefer /data/tbl_localities.xlsx; if missing, copy from repo ./tbl_localities.xlsx
-// - If the applied checksum differs from previously applied one, rebuild DB preserving recent contact fields
-try {
-  const cwd = process.cwd();
-  const repoXlsx = path.resolve(cwd, 'tbl_localities.xlsx');
-  const dataXlsx = '/data/tbl_localities.xlsx';
-  const marker = '/data/.xlsx_applied.sha256';
-  const candidates = [dataXlsx, repoXlsx, path.join(cwd, 'data', 'tbl_localities.xlsx')];
-  const found = candidates.find(p => { try { return fs.existsSync(p) } catch { return false } });
-  if (!found) {
-    console.log('[boot] No spreadsheet found to apply. Skipping auto-rebuild.');
-  } else {
-    // Ensure /data copy exists and is current
-    try { fs.mkdirSync('/data', { recursive: true }); } catch {}
-    if (found !== dataXlsx) {
-      try { fs.copyFileSync(found, dataXlsx); console.log(`[boot] Copied spreadsheet ${found} -> ${dataXlsx}`) } catch (e) { console.warn('[boot] Copy spreadsheet failed:', e?.message || e) }
-    }
-    // Compute checksum
-    let sha = null; let size = 0;
-    try { const buf = fs.readFileSync(dataXlsx); size = buf.length; sha = crypto.createHash('sha256').update(buf).digest('hex') } catch {}
-    const prev = (()=>{ try { return fs.readFileSync(marker, 'utf8').trim() } catch { return '' } })();
-    const shouldRun = !!sha && sha !== prev;
-    if (!shouldRun) {
-      console.log('[boot] Spreadsheet already applied (checksum match). Skipping rebuild.');
-    } else {
-      console.log(`[boot] Applying spreadsheet ${dataXlsx} (size ${size} bytes, sha256 ${sha})`);
-      try {
-        const mod = await import('./tools/rebuild_from_xlsx_preserve_recent.js');
-        const func = mod.runRebuild || mod.default;
-        if (typeof func === 'function') {
-          const res = await func(dataXlsx);
-          console.log('[boot] Rebuild result:', JSON.stringify(res));
-          try {
-            const expected = Number(process.env.EXPECTED_TOTAL || 24684);
-            if (typeof res?.totalAfter === 'number' && res.totalAfter !== expected) {
-              console.warn(`[boot] WARNING: totalAfter ${res.totalAfter} != expected ${expected}`);
-            }
-          } catch {}
-          try { fs.writeFileSync(marker, sha) } catch {}
-        } else {
-          console.warn('[boot] Rebuild function not available');
-        }
-      } catch (e) {
-        console.warn('[boot] Auto-rebuild failed:', e?.message || e);
-      }
-    }
-  }
-} catch (e) {
-  console.warn('[boot] Auto-apply spreadsheet check failed:', e?.message || e);
-}
+// XLSX/Rebuild workflow removed — data edits happen via the web UI only.
 
 const app = express();
 

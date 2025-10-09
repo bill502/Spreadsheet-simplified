@@ -100,34 +100,9 @@ Notes
 - SQLite prefers a single process instance; avoid multi-instance horizontal scaling.
 - HTTPS is handled by the platform; the server binds 0.0.0.0 and listens on PORT.
 
-Spreadsheet Source of Truth (XLSX)
-- Preferred location in production: `/data/tbl_localities.xlsx`
-- Admin can upload/replace via API:
-  - POST `/api/admin/upload-xlsx` (admin only)
-  - Body (JSON): { "data": "<base64-of-xlsx>", "sha256": "<optional-expected-hex>" }
-  - Writes to `/data/tbl_localities.xlsx` atomically and returns size/checksum.
-- Rebuild database while preserving recent contact fields:
-  - POST `/api/admin/rebuild-preserve`
-    - Optional body: { "path": "/data/tbl_localities.xlsx" }
-    - Auto-detects spreadsheet in order: request path, `/data/tbl_localities.xlsx`, `./tbl_localities.xlsx`, `<cwd>/tbl_localities.xlsx`, `<cwd>/data/tbl_localities.xlsx`.
-    - After success, always copies source to `/data/tbl_localities.xlsx`.
-    - Returns: { ok, path, sizeBytes, sha256, rowsInXlsx, preservedCount, importedCount, totalAfter, sample }.
-- Verify totals and preservation:
-  - Expect `totalAfter` to equal 24684.
-  - Inspect `sample` for 3–5 preserved rows showing before/after of Called/Visited/ConfirmedVoter/CallDate/VisitDate/LawyerForum.
-- Debug helpers (admin or X-Debug-Token; token only required in production):
-  - GET `/api/_debug/xlsx` → { path, exists, sizeBytes, sha256 }
-  - GET `/api/_debug/db` → { dbPath, exists, sizeBytes, tablesCount }
-  - GET `/api/_debug/tables` → { tables: [{ name, count }] }
-
-Automatic Apply on Boot (hands-off)
-- If `/data/tbl_localities.xlsx` exists (or `./tbl_localities.xlsx` in the repo), the server will on startup:
-  - Copy it into `/data/tbl_localities.xlsx` if needed
-  - Compute its SHA-256 and compare with `/data/.xlsx_applied.sha256`
-  - If different, run the rebuild-preserve process automatically and then record the checksum
-- This keeps deployments fully hands-off: committing `./tbl_localities.xlsx` with the desired content and redeploying will refresh the DB automatically while preserving recent contact fields.
-
 Search Ordering Safety
 - GET `/api/search` supports `sort` (whitelist: last_name, first_name, email, name/lawyername) and `desc=true`.
 - Ordering is case-insensitive for text columns (`COLLATE NOCASE`), and LIMIT/OFFSET are bound parameters.
+
+
 

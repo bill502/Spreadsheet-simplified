@@ -1,10 +1,9 @@
 import express from 'express';
 import fs from 'node:fs';
 import cookie from 'cookie';
-import crypto from 'node:crypto';
+// crypto import removed (no XLSX checksum functionality)
 import db, { getColumns } from '../db.js';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+// No path/url imports needed; XLSX flow removed
 
 const router = express.Router();
 
@@ -402,26 +401,7 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
 });
 
 // Debug XLSX info (admin or debug token)
-router.get('/_debug/xlsx', debugGuard, (req, res) => {
-  try {
-    const p = '/data/tbl_localities.xlsx';
-    let exists = false, sizeBytes = 0, sha256 = null;
-    try {
-      const st = fs.statSync(p);
-      exists = st.isFile();
-      sizeBytes = st.size;
-      if (exists) {
-        const h = crypto.createHash('sha256');
-        const buf = fs.readFileSync(p);
-        h.update(buf);
-        sha256 = h.digest('hex');
-      }
-    } catch {}
-    return res.json({ path: p, exists, sizeBytes, sha256 });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || String(e) });
-  }
-});
+// XLSX debug removed — spreadsheet imports are no longer supported.
 
 // Localities list (with on-demand seeding)
 router.get('/localities', (req, res) => {
@@ -469,61 +449,7 @@ router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
 });
 
 // Admin-only: rebuild DB from xlsx while preserving recent contact edits since cutoff
-router.post('/admin/rebuild-preserve', requireRole('admin'), async (req, res) => {
-  try {
-    const requested = (req.body?.path || '').toString().trim();
-    const cwd = process.cwd();
-    const candidates = [];
-    if (requested) candidates.push(requested);
-    candidates.push('/data/tbl_localities.xlsx');
-    candidates.push('./tbl_localities.xlsx');
-    candidates.push(path.join(cwd, 'tbl_localities.xlsx'));
-    candidates.push(path.join(cwd, 'data', 'tbl_localities.xlsx'));
-    const found = candidates.find(p => { try { return fs.existsSync(p) } catch { return false } });
-    if (!found) {
-      return res.status(404).json({ error: 'xlsx not found', tried: candidates });
-    }
-    console.log('[rebuild] Using spreadsheet:', found);
-    const mod = await import('../tools/rebuild_from_xlsx_preserve_recent.js');
-    const func = mod.runRebuild || mod.default;
-    if (typeof func !== 'function') return res.status(500).json({ error: 'rebuild function not available' });
-    const result = await func(found);
-    // Best-effort copy into /data for future runs
-    try {
-      const dest = '/data/tbl_localities.xlsx';
-      if (found !== dest) { fs.copyFileSync(found, dest) }
-    } catch {}
-    // Compute checksum/size
-    let sizeBytes = 0; let sha256 = null;
-    try {
-      const st = fs.statSync(found); sizeBytes = st.size;
-      const h = crypto.createHash('sha256');
-      const buf = fs.readFileSync(found); h.update(buf); sha256 = h.digest('hex');
-    } catch {}
-    return res.json({ ok: true, path: found, sizeBytes, sha256, ...result });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || String(e) });
-  }
-});
+// XLSX rebuild removed — database is managed via the application UI only.
 
 // Admin-only upload/replace XLSX on persistent disk using base64 body
-router.post('/admin/upload-xlsx', requireRole('admin'), (req, res) => {
-  try {
-    const b = req.body || {};
-    const dataB64 = (b.data || '').toString();
-    const expectSha = (b.sha256 || '').toString().trim().toLowerCase();
-    if (!dataB64) return res.status(400).json({ error: 'Missing data (base64)' });
-    const buf = Buffer.from(dataB64, 'base64');
-    if (buf.length < 1000) return res.status(400).json({ error: 'File too small' });
-    const hash = crypto.createHash('sha256').update(buf).digest('hex');
-    if (expectSha && expectSha !== hash) return res.status(400).json({ error: 'Checksum mismatch', got: hash });
-    const dest = '/data/tbl_localities.xlsx';
-    const tmp = dest + '.tmp';
-    fs.mkdirSync('/data', { recursive: true });
-    fs.writeFileSync(tmp, buf);
-    fs.renameSync(tmp, dest);
-    return res.json({ ok: true, path: dest, sizeBytes: buf.length, sha256: hash });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || String(e) });
-  }
-});
+// XLSX upload removed — spreadsheet uploads are no longer supported.
