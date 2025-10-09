@@ -2,7 +2,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Default DB path: use env if provided. In production (Render/Railway), default to /data/app.db.
 const DEFAULT_DB = process.env.DATABASE_URL
@@ -79,13 +79,13 @@ function ensureMigrationsTable() {
   )`).run();
 }
 
-export function runMigrations() {
+export async function runMigrations() {
   try {
     ensureMigrationsTable();
     const serverDir = getServerDir();
     const migDir = path.join(serverDir, 'migrations');
     if (!fs.existsSync(migDir)) return;
-    const files = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
+    const filesSql = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
     const applied = new Set(db.prepare('SELECT name FROM __migrations').all().map(r => r.name));
     const tx = db.transaction((sqlFiles) => {
       for (const f of sqlFiles) {
@@ -96,7 +96,23 @@ export function runMigrations() {
         console.log('[db] Applied migration', f);
       }
     });
-    tx(files);
+    tx(filesSql);
+
+    // JS migrations (for complex operations like dropping a column)
+    const filesJs = fs.readdirSync(migDir).filter(f => f.endsWith('.js')).sort();
+    for (const f of filesJs) {
+      if (applied.has(f)) continue;
+      const modUrl = pathToFileURL(path.join(migDir, f)).href;
+      const mod = await import(modUrl);
+      if (typeof mod.default === 'function') {
+        const run = db.transaction(() => {
+          mod.default(db);
+          db.prepare('INSERT INTO __migrations(name, run_at) VALUES(?, ?)').run(f, new Date().toISOString());
+        });
+        run();
+        console.log('[db] Applied JS migration', f);
+      }
+    }
   } catch (e) {
     console.error('[db] Migration error:', e?.message || e);
     throw e;

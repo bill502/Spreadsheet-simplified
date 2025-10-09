@@ -12,7 +12,15 @@ import api from './routes/api.js';
 dotenv.config();
 initDb();
 try {
-  runMigrations();
+  await runMigrations();
+} catch {}
+
+// Cleanup: remove Status values and normalize PP/UC to integer strings
+try {
+  try { db.exec('UPDATE people SET Status=NULL'); } catch {}
+  try { db.exec('UPDATE people SET HighlightedAddress=NULL'); } catch {}
+  try { db.exec("UPDATE people SET PP = CAST(PP AS INTEGER) WHERE PP IS NOT NULL AND TRIM(PP)<>''"); } catch {}
+  try { db.exec("UPDATE people SET UC = CAST(UC AS INTEGER) WHERE UC IS NOT NULL AND TRIM(UC)<>''"); } catch {}
 } catch {}
 
 // Seed localities from existing people if localities table is empty

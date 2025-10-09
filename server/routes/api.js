@@ -64,11 +64,23 @@ function getRowByNumber(n) {
   return row || { rowNumber: n };
 }
 
+// Normalize output row: remove Status and format PP/UC without decimals
+function formatOutRow(row){
+  if (!row) return row;
+  const r = { ...row };
+  try { delete r.Status; } catch {}
+  try { delete r.HighlightedAddress; } catch {}
+  try { if (r.PP !== undefined && r.PP !== null) r.PP = sanitizePPUC(r.PP) ?? r.PP; } catch {}
+  try { if (r.UC !== undefined && r.UC !== null) r.UC = sanitizePPUC(r.UC) ?? r.UC; } catch {}
+  return r;
+}
+
 // Routes
 router.get('/health', (req, res) => res.json({ ok: true }));
 
 router.get('/columns', (req, res) => {
-  return res.json({ columns: getColumns().filter(Boolean) });
+  const cols = (getColumns() || []).filter(Boolean).filter(c => (c !== 'Status' && c !== 'HighlightedAddress'));
+  return res.json({ columns: cols });
 });
 
 router.get('/search', (req, res) => {
@@ -78,7 +90,8 @@ router.get('/search', (req, res) => {
   const by = (req.query.by || '').toString().trim();
   const cols = getColumns();
   if (!q) {
-    const items = db.prepare('SELECT * FROM people ORDER BY rowNumber LIMIT ? OFFSET ?').all(limit, offset);
+    const itemsRaw = db.prepare('SELECT * FROM people ORDER BY rowNumber LIMIT ? OFFSET ?').all(limit, offset);
+    const items = itemsRaw.map(formatOutRow);
     const total = db.prepare('SELECT COUNT(*) AS c FROM people').get().c;
     return res.json({ total, items });
   }
@@ -92,14 +105,15 @@ router.get('/search', (req, res) => {
     return res.json({ total: 0, items: [] });
   }
   const conds = likeCols.map(c => `[${c}] LIKE @pat`).join(' OR ');
-  const items = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY rowNumber LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
+  const itemsRaw = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY rowNumber LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
   const total = db.prepare(`SELECT COUNT(*) AS c FROM people WHERE ${conds}`).get({ pat: `%${q}%` }).c;
+  const items = itemsRaw.map(formatOutRow);
   return res.json({ total, items });
 });
 
 router.get('/row/:id', (req, res) => {
   const n = parseInt(req.params.id, 10);
-  return res.json(getRowByNumber(n));
+  return res.json(formatOutRow(getRowByNumber(n)));
 });
 
 router.post('/row', requireRole('editor'), (req, res) => {
@@ -116,7 +130,7 @@ router.post('/row', requireRole('editor'), (req, res) => {
   const ph = keys.map(k => `@${k.replace(/[^A-Za-z0-9_]/g, '_')}`).join(',');
   const params = {}; keys.forEach(k => { params[k.replace(/[^A-Za-z0-9_]/g, '_')] = fields[k]; });
   db.prepare(`INSERT INTO people (${colSql}) VALUES (${ph})`).run(params);
-  return res.status(201).json(getRowByNumber(newNum));
+  return res.status(201).json(formatOutRow(getRowByNumber(newNum)));
 });
 
 router.post('/row/:id', requireRole('editor'), (req, res) => {
@@ -150,7 +164,7 @@ router.post('/row/:id', requireRole('editor'), (req, res) => {
   const params = { n };
   Object.entries(fields).forEach(([k, v]) => { params[k.replace(/[^A-Za-z0-9_]/g, '_')] = v; });
   db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE rowNumber = @n`).run(params);
-  const afterRow = getRowByNumber(n);
+  const afterRow = formatOutRow(getRowByNumber(n));
   const after = JSON.stringify(afterRow);
   db.prepare(`INSERT INTO audit(ts,user,action,rowNumber,details,before,after)
     VALUES(@ts,@u,'update',@n,@d,@b,@a)`).run({ ts: new Date().toISOString(), u: sess?.user || '', n, d: Object.keys(fields).join(','), b: before, a: after });
@@ -310,7 +324,8 @@ router.get('/reports', requireRole('editor'), (req, res) => {
   if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
   sql += ' ORDER BY rowNumber DESC LIMIT @l';
   params.l = limit;
-  const items = db.prepare(sql).all(params);
+  const itemsRaw = db.prepare(sql).all(params);
+  const items = itemsRaw.map(formatOutRow);
   return res.json({ total: items.length, items });
 });
 
