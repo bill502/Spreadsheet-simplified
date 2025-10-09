@@ -8,7 +8,7 @@ async function refreshUser(){ try{ const me=await api('/api/me'); state.user=me.
 function renderAuth(){ const lbl=el('userLabel'); if(lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer'; const lo=el('btnLogout'); if(lo) lo.style.display = state.user ? '' : 'none' }
 
 // Show/hide core admin sections; default hidden until auth confirmed
-async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['navPanel','usersPanel','managePanel','revertPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = 'none' }); if (isAdmin){ const n=el('navPanel'); if(n) n.style.display='block' } return isAdmin }
+async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['navPanel','usersPanel','revertPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = 'none' }); if (isAdmin){ const n=el('navPanel'); if(n) n.style.display='block' } return isAdmin }
 
 // Fetch users from server and render table
 async function loadUsers(){ const data = await api('/api/admin/users'); state.users = data.users || []; renderUsers() }
@@ -29,10 +29,10 @@ async function doRevert(){ const from=el('revFrom').value; const to=el('revTo').
 // Simple tab switcher. For Users tab, show both list + manage form together.
 function setPanel(id){
   const showUsers = (id === 'users');
-  const panels = ['usersPanel','localitiesPanel','managePanel','revertPanel'];
+  const panels = ['usersPanel','localitiesPanel','revertPanel'];
   panels.forEach(pid=>{
     const n = el(pid); if(!n) return;
-    if (showUsers){ n.style.display = (pid==='usersPanel' || pid==='managePanel') ? 'block' : 'none'; }
+    if (showUsers){ n.style.display = (pid==='usersPanel') ? 'block' : 'none'; }
     else { n.style.display = (pid===id)?'block':'none'; }
   });
 }
