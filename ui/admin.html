@@ -19,6 +19,16 @@
       </div>
     </header>
     <main>
+      <div class="panel" id="navPanel" style="display:none">
+        <div class="content">
+          <div class="row" style="gap:8px; flex-wrap:wrap">
+            <button id="tabUsers" class="ghost">Users</button>
+            <button id="tabLocalities" class="ghost">Localities</button>
+            <button id="tabManage" class="ghost">Manage User</button>
+            <button id="tabRevert" class="ghost">Revert</button>
+          </div>
+        </div>
+      </div>
       <div class="panel" id="guardPanel" style="display:none">
         <div class="content">
           <h2>Access Denied</h2>
@@ -40,6 +50,33 @@
               <tbody id="usersBody"></tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div class="panel" id="localitiesPanel" style="display:none">
+        <div class="content">
+          <h2>Localities</h2>
+          <div class="row" style="justify-content:space-between; margin-bottom:6px">
+            <div class="row" style="gap:6px"><input id="locSearch" type="text" placeholder="Search localities" style="width:240px" /><button id="btnLocSearch" class="ghost">Search</button></div>
+            <div class="row" style="gap:6px"><button id="btnLocRefresh" class="ghost">Refresh</button><button id="btnLocImport" class="ghost">Rebuild From Excel</button></div>
+          </div>
+          <div style="overflow:auto; max-height:38vh">
+            <table>
+              <thead><tr><th>Name</th><th>Alias</th><th>PP</th><th>UC</th><th>Actions</th></tr></thead>
+              <tbody id="locBody"></tbody>
+            </table>
+          </div>
+          <div class="grid-fields" style="margin-top:8px">
+            <div class="field"><label>Name</label><input id="locName" type="text" placeholder="Locality name" /></div>
+            <div class="field"><label>Alias</label><input id="locAlias" type="text" placeholder="(optional)" /></div>
+            <div class="field"><label>PP</label><input id="locPP" type="text" placeholder="PP" /></div>
+            <div class="field"><label>UC</label><input id="locUC" type="text" placeholder="UC" /></div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <button id="btnLocSave">Save Locality</button>
+            <button id="btnLocClear" class="secondary">Clear</button>
+          </div>
+          <div class="muted" id="locMsg" style="margin-top:6px"></div>
         </div>
       </div>
 
@@ -76,20 +113,6 @@
             <button id="btnRevert">Revert</button>
           </div>
           <div class="muted" id="revertMsg" style="margin-top:6px"></div>
-        </div>
-      </div>
-
-      <div class="panel" id="importPanel" style="display:none">
-        <div class="content">
-          <h2>Import Excel</h2>
-          <div class="grid-fields">
-            <div class="field"><label>Excel Path</label><input id="impPath" type="text" placeholder="./tbl_localities.xlsx" /></div>
-            <div class="field"><label>Sheet</label><input id="impSheetInfo" type="text" value="Uses 'merged' or first sheet automatically" disabled /></div>
-          </div>
-          <div class="row" style="gap:8px; margin-top:8px">
-            <button id="btnImport">Import from Path</button>
-          </div>
-          <div class="muted" id="impMsg" style="margin-top:6px"></div>
         </div>
       </div>
     </main>

@@ -7,12 +7,12 @@ const state = { user:null, role:'viewer', users:[], editing:null };
 async function refreshUser(){ try{ const me=await api('/api/me'); state.user=me.user||null; state.role=me.role||'viewer' } catch { state.user=null; state.role='viewer' } }
 function renderAuth(){ const lbl=el('userLabel'); if(lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer'; const lo=el('btnLogout'); if(lo) lo.style.display = state.user ? '' : 'none' }
 
-async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['usersPanel','managePanel','revertPanel','importPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = isAdmin ? 'block' : 'none' }); return isAdmin }
+async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['navPanel','usersPanel','managePanel','revertPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = isAdmin ? 'block' : 'none' }); return isAdmin }
 
 // Fetch users from server and render table
 async function loadUsers(){ const data = await api('/api/admin/users'); state.users = data.users || []; renderUsers() }
 
-function renderUsers(){ const tbody = el('usersBody'); tbody.innerHTML = ''; state.users.forEach(u=>{ const tr=document.createElement('tr'); const td1=document.createElement('td'); const td2=document.createElement('td'); const td3=document.createElement('td'); td1.textContent=u.username; td2.textContent=u.role; const btnE=document.createElement('button'); btnE.className='ghost'; btnE.textContent='Edit'; btnE.addEventListener('click',()=> startEdit(u)); const btnD=document.createElement('button'); btnD.className='ghost'; btnD.style.borderColor='var(--border)'; btnD.style.color='var(--text)'; btnD.textContent='Delete'; btnD.addEventListener('click',()=> deleteUser(u)); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(btnE,btnD); td3.append(actions); tr.append(td1,td2,td3); tbody.appendChild(tr) }); const meta=el('usersMeta'); if(meta) meta.textContent = `${state.users.length} users` }
+function renderUsers(){ const tbody = el('usersBody'); if(!tbody) return; tbody.innerHTML = ''; state.users.forEach(u=>{ const tr=document.createElement('tr'); const td1=document.createElement('td'); const td2=document.createElement('td'); const td3=document.createElement('td'); td1.textContent=u.username; td2.textContent=u.role; const btnE=document.createElement('button'); btnE.className='ghost'; btnE.textContent='Edit'; btnE.addEventListener('click',()=> startEdit(u)); const btnD=document.createElement('button'); btnD.className='ghost'; btnD.style.borderColor='var(--border)'; btnD.style.color='var(--text)'; btnD.textContent='Delete'; btnD.addEventListener('click',()=> deleteUser(u)); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(btnE,btnD); td3.append(actions); tr.append(td1,td2,td3); tbody.appendChild(tr) }); const meta=el('usersMeta'); if(meta) meta.textContent = `${state.users.length} users` }
 
 function startEdit(u){ state.editing = { ...u }; el('manageTitle').textContent = `Edit User: ${u.username}`; el('admUser').value = u.username; el('admPass').value = ''; el('admRole').value = u.role; el('managePanel').scrollIntoView({behavior:'smooth'}) }
 
@@ -25,33 +25,31 @@ async function createOrUpdateUser(){ const username=el('admUser').value.trim(); 
 
 async function doRevert(){ const from=el('revFrom').value; const to=el('revTo').value; if(!from||!to){ toast('from/to required'); return } const res = await api('/api/admin/revert',{ method:'POST', body: JSON.stringify({ from, to })}); el('revertMsg').textContent = `Reverted ${res.reverted ?? 0} change(s)` }
 
+function setPanel(id){ ['usersPanel','localitiesPanel','managePanel','revertPanel'].forEach(pid=>{ const n=el(pid); if(n) n.style.display = (pid===id)?'block':'none' }) }
+
 function bind(){
   el('btnLogout')?.addEventListener('click', async ()=>{ try{ await api('/api/logout',{method:'POST'}); location.href='index.html' }catch(e){ toast(e.message) } });
   el('btnUsersRefresh')?.addEventListener('click', ()=> loadUsers().catch(e=>toast(e.message)));
   el('btnCreateUser')?.addEventListener('click', ()=> createOrUpdateUser().catch(e=>toast(e.message)));
   el('btnCancelEdit')?.addEventListener('click', ()=> cancelEdit());
   el('btnRevert')?.addEventListener('click', ()=> doRevert().catch(e=>toast(e.message)));
-  el('btnImport')?.addEventListener('click', async ()=>{
-    const p = (el('impPath')?.value || '').trim(); if(!p){ toast('Enter Excel path'); return }
-    try { const res = await api('/api/admin/import',{ method:'POST', body: JSON.stringify({ path: p })}); el('impMsg').textContent = `Imported ${res.count} rows (${res.sheet})`; toast('Import complete'); }
-    catch(e){ toast(e.message) }
-  });
+  // Tabs
+  el('tabUsers')?.addEventListener('click', ()=> setPanel('usersPanel'));
+  el('tabLocalities')?.addEventListener('click', ()=> { setPanel('localitiesPanel'); loadLocalities().catch(e=>toast(e.message)) });
+  el('tabManage')?.addEventListener('click', ()=> setPanel('managePanel'));
+  el('tabRevert')?.addEventListener('click', ()=> setPanel('revertPanel'));
   // Localities
   el('btnLocRefresh')?.addEventListener('click', ()=> loadLocalities().catch(e=>toast(e.message)));
   el('btnLocSearch')?.addEventListener('click', ()=> loadLocalities((el('locSearch')?.value||'').trim()).catch(e=>toast(e.message)));
   el('btnLocSave')?.addEventListener('click', ()=> saveLocality().catch(e=>toast(e.message)));
   el('btnLocClear')?.addEventListener('click', ()=> clearLocForm());
-  el('btnLocImport')?.addEventListener('click', async ()=>{
-    const p = (el('impPath')?.value || '').trim(); if(!p){ toast('Enter Excel path in Import Excel above'); return }
-    try { const res = await api('/api/admin/localities/import',{ method:'POST', body: JSON.stringify({ path: p })}); el('locMsg').textContent = `Rebuilt ${res.imported ?? 0} localities from ${res.sheet}`; toast('Localities imported'); await loadLocalities(); }
-    catch(e){ toast(e.message) }
-  });
+  // Optional rebuild kept server-side; UI removed as requested
 }
 
-(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ await loadUsers(); await loadLocalities(); } } catch(e){ toast(`Init failed: ${e.message}`) } })();
+(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ setPanel('localitiesPanel'); await loadUsers(); await loadLocalities(); } } catch(e){ toast(`Init failed: ${e.message}`) } })();
 
 // Localities admin: list, save, delete
-async function loadLocalities(q){ const params = q ? ('?q='+encodeURIComponent(q)) : ''; const data = await api('/api/localities'+params); const items = data.items||[]; const tbody = el('locBody'); tbody.innerHTML=''; items.forEach(loc=>{ const tr=document.createElement('tr'); const t1=document.createElement('td'); t1.textContent=loc.name; const t2=document.createElement('td'); t2.textContent=loc.alias||''; const t3=document.createElement('td'); t3.textContent=loc.pp||''; const t4=document.createElement('td'); t4.textContent=loc.uc||''; const t5=document.createElement('td'); const bE=document.createElement('button'); bE.className='ghost'; bE.textContent='Edit'; bE.addEventListener('click',()=>{ el('locName').value=loc.name; el('locAlias').value=loc.alias||''; el('locPP').value=loc.pp||''; el('locUC').value=loc.uc||''; }); const bD=document.createElement('button'); bD.className='ghost'; bD.textContent='Delete'; bD.addEventListener('click', async ()=>{ if(!confirm(`Delete locality '${loc.name}'?`)) return; try{ await api('/api/admin/locality/'+encodeURIComponent(loc.name),{ method:'DELETE' }); toast('Locality deleted'); await loadLocalities(q) } catch(e){ toast(e.message) } }); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(bE,bD); t5.append(actions); tr.append(t1,t2,t3,t4,t5); tbody.appendChild(tr) }) }
+async function loadLocalities(q){ const params = q ? ('?q='+encodeURIComponent(q)) : ''; const data = await api('/api/localities'+params); const items = data.items||[]; const tbody = el('locBody'); if(!tbody) return; tbody.innerHTML=''; items.forEach(loc=>{ const tr=document.createElement('tr'); const t1=document.createElement('td'); t1.textContent=loc.name; const t2=document.createElement('td'); t2.textContent=loc.alias||''; const t3=document.createElement('td'); t3.textContent=loc.pp||''; const t4=document.createElement('td'); t4.textContent=loc.uc||''; const t5=document.createElement('td'); const bE=document.createElement('button'); bE.className='ghost'; bE.textContent='Edit'; bE.addEventListener('click',()=>{ el('locName').value=loc.name; el('locAlias').value=loc.alias||''; el('locPP').value=loc.pp||''; el('locUC').value=loc.uc||''; }); const bD=document.createElement('button'); bD.className='ghost'; bD.textContent='Delete'; bD.addEventListener('click', async ()=>{ if(!confirm(`Delete locality '${loc.name}'?`)) return; try{ await api('/api/admin/locality/'+encodeURIComponent(loc.name),{ method:'DELETE' }); toast('Locality deleted'); await loadLocalities(q) } catch(e){ toast(e.message) } }); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(bE,bD); t5.append(actions); tr.append(t1,t2,t3,t4,t5); tbody.appendChild(tr) }) }
 
 async function saveLocality(){ const name=(el('locName')?.value||'').trim(); if(!name){ toast('Name required'); return } const alias=(el('locAlias')?.value||'').trim(); const pp=(el('locPP')?.value||'').trim(); const uc=(el('locUC')?.value||'').trim(); await api('/api/admin/locality',{ method:'POST', body: JSON.stringify({ name, alias, pp, uc })}); toast('Locality saved'); await loadLocalities() }
 function clearLocForm(){ ['locName','locAlias','locPP','locUC'].forEach(id=>{ const n=el(id); if(n) n.value='' }); }
