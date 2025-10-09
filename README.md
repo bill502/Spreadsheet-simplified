@@ -71,6 +71,21 @@ Option B — manual Web Service
 
 Entry point
 - The server entry is at server/index.js. Both package.json ("start": "node server/index.js") and render.yaml (startCommand: node server/index.js) point to this path.
+
+Admin UI
+- Tabs: Users (list + form), Localities, Revert.
+- Users: create/update roles and credentials.
+- Localities: manage the list of localities (name, alias, PP, UC). This drives the Locality dropdown in Profile and auto‑sets PP/UC.
+- Revert: restore changes by audit window.
+
+Localities & PP/UC mapping
+- Localities table (name, alias, pp, uc) is seeded from people on first boot if empty, and again on first /api/localities if needed.
+- Editors can only pick a Locality. PP/UC are set automatically and are not editable for editors.
+- Admins can edit PP/UC directly or adjust the Locality mapping.
+
+Removed Excel import
+- All Excel import routes and UI have been removed for the final launch.
+- To update data in the future, use the web UI only.
 4) Add a persistent disk mounted at /data (>=5GB)
 5) (Optional) Set DATABASE_URL=/data/app.db (defaults to this in production). The server will copy ./data/app.db or ./seed/app.db into /data/app.db on first boot if the file is missing.
 

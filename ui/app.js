@@ -190,6 +190,7 @@ function renderDetails() {
   // Full editable grid (edit mode)
   const readOnly = new Set(['ID','new ID','CallDate','VisitDate','LCDate']);
   const keys = Array.from(new Set([...Object.keys(d).filter(k => k !== 'rowNumber'), 'LawyerForum']));
+  // Render editable inputs with Locality dropdown and admin-only PP/UC edit
   const all = document.createElement('div'); all.className='grid-fields'; all.style.marginTop='10px';
   const isAdmin = (state.role === 'admin');
   keys.forEach(k => {

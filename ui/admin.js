@@ -7,7 +7,8 @@ const state = { user:null, role:'viewer', users:[], editing:null };
 async function refreshUser(){ try{ const me=await api('/api/me'); state.user=me.user||null; state.role=me.role||'viewer' } catch { state.user=null; state.role='viewer' } }
 function renderAuth(){ const lbl=el('userLabel'); if(lbl) lbl.textContent = state.user ? `${state.user} (${state.role})` : 'Viewer'; const lo=el('btnLogout'); if(lo) lo.style.display = state.user ? '' : 'none' }
 
-async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['navPanel','usersPanel','managePanel','revertPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = isAdmin ? 'block' : 'none' }); return isAdmin }
+// Show/hide core admin sections; default hidden until auth confirmed
+async function ensureAdmin(){ await refreshUser(); renderAuth(); const isAdmin = state.role === 'admin'; el('guardPanel').style.display = isAdmin ? 'none' : 'block'; ['navPanel','usersPanel','managePanel','revertPanel','localitiesPanel'].forEach(id=>{ const n=el(id); if(n) n.style.display = 'none' }); if (isAdmin){ const n=el('navPanel'); if(n) n.style.display='block' } return isAdmin }
 
 // Fetch users from server and render table
 async function loadUsers(){ const data = await api('/api/admin/users'); state.users = data.users || []; renderUsers() }
@@ -25,7 +26,16 @@ async function createOrUpdateUser(){ const username=el('admUser').value.trim(); 
 
 async function doRevert(){ const from=el('revFrom').value; const to=el('revTo').value; if(!from||!to){ toast('from/to required'); return } const res = await api('/api/admin/revert',{ method:'POST', body: JSON.stringify({ from, to })}); el('revertMsg').textContent = `Reverted ${res.reverted ?? 0} change(s)` }
 
-function setPanel(id){ ['usersPanel','localitiesPanel','managePanel','revertPanel'].forEach(pid=>{ const n=el(pid); if(n) n.style.display = (pid===id)?'block':'none' }) }
+// Simple tab switcher. For Users tab, show both list + manage form together.
+function setPanel(id){
+  const showUsers = (id === 'users');
+  const panels = ['usersPanel','localitiesPanel','managePanel','revertPanel'];
+  panels.forEach(pid=>{
+    const n = el(pid); if(!n) return;
+    if (showUsers){ n.style.display = (pid==='usersPanel' || pid==='managePanel') ? 'block' : 'none'; }
+    else { n.style.display = (pid===id)?'block':'none'; }
+  });
+}
 
 function bind(){
   el('btnLogout')?.addEventListener('click', async ()=>{ try{ await api('/api/logout',{method:'POST'}); location.href='index.html' }catch(e){ toast(e.message) } });
@@ -34,9 +44,8 @@ function bind(){
   el('btnCancelEdit')?.addEventListener('click', ()=> cancelEdit());
   el('btnRevert')?.addEventListener('click', ()=> doRevert().catch(e=>toast(e.message)));
   // Tabs
-  el('tabUsers')?.addEventListener('click', ()=> setPanel('usersPanel'));
+  el('tabUsers')?.addEventListener('click', ()=> setPanel('users'));
   el('tabLocalities')?.addEventListener('click', ()=> { setPanel('localitiesPanel'); loadLocalities().catch(e=>toast(e.message)) });
-  el('tabManage')?.addEventListener('click', ()=> setPanel('managePanel'));
   el('tabRevert')?.addEventListener('click', ()=> setPanel('revertPanel'));
   // Localities
   el('btnLocRefresh')?.addEventListener('click', ()=> loadLocalities().catch(e=>toast(e.message)));
@@ -46,7 +55,7 @@ function bind(){
   // Optional rebuild kept server-side; UI removed as requested
 }
 
-(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ setPanel('localitiesPanel'); await loadUsers(); await loadLocalities(); } } catch(e){ toast(`Init failed: ${e.message}`) } })();
+(async function init(){ try{ bind(); const ok = await ensureAdmin(); if(ok){ setPanel('users'); await loadUsers(); await loadLocalities(); } } catch(e){ toast(`Init failed: ${e.message}`) } })();
 
 // Localities admin: list, save, delete
 async function loadLocalities(q){ const params = q ? ('?q='+encodeURIComponent(q)) : ''; const data = await api('/api/localities'+params); const items = data.items||[]; const tbody = el('locBody'); if(!tbody) return; tbody.innerHTML=''; items.forEach(loc=>{ const tr=document.createElement('tr'); const t1=document.createElement('td'); t1.textContent=loc.name; const t2=document.createElement('td'); t2.textContent=loc.alias||''; const t3=document.createElement('td'); t3.textContent=loc.pp||''; const t4=document.createElement('td'); t4.textContent=loc.uc||''; const t5=document.createElement('td'); const bE=document.createElement('button'); bE.className='ghost'; bE.textContent='Edit'; bE.addEventListener('click',()=>{ el('locName').value=loc.name; el('locAlias').value=loc.alias||''; el('locPP').value=loc.pp||''; el('locUC').value=loc.uc||''; }); const bD=document.createElement('button'); bD.className='ghost'; bD.textContent='Delete'; bD.addEventListener('click', async ()=>{ if(!confirm(`Delete locality '${loc.name}'?`)) return; try{ await api('/api/admin/locality/'+encodeURIComponent(loc.name),{ method:'DELETE' }); toast('Locality deleted'); await loadLocalities(q) } catch(e){ toast(e.message) } }); const actions=document.createElement('div'); actions.className='row'; actions.style.gap='6px'; actions.append(bE,bD); t5.append(actions); tr.append(t1,t2,t3,t4,t5); tbody.appendChild(tr) }) }
