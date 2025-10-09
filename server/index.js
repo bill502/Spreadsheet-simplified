@@ -21,7 +21,7 @@ try {
   const c = db.prepare("SELECT COUNT(*) AS c FROM localities").get().c;
   if (Number(c) === 0) {
     const sanitize = (v) => { if (v==null) return ''; if (typeof v==='number') return String(Math.trunc(v)); const s=String(v).trim(); return s.includes('.')? s.split('.')[0] : s };
-    const rows = db.prepare("SELECT DISTINCT [LocalityName] AS name, [PP] AS pp, [UC] AS uc FROM people WHERE [LocalityName] IS NOT NULL AND TRIM([LocalityName])<>''").all();
+    const rows = db.prepare("SELECT DISTINCT COALESCE([LocalityName],[Locality]) AS name, [PP] AS pp, [UC] AS uc FROM people WHERE COALESCE([LocalityName],[Locality]) IS NOT NULL AND TRIM(COALESCE([LocalityName],[Locality]))<>''").all();
     const tx = db.transaction((list)=>{
       const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
       for (const r of list) { ins.run(String(r.name).trim(), '', sanitize(r.pp), sanitize(r.uc)) }
