@@ -411,12 +411,28 @@ router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
 // Admin-only: rebuild DB from xlsx while preserving recent contact edits since cutoff
 router.post('/admin/rebuild-preserve', requireRole('admin'), async (req, res) => {
   try {
-    const p = (req.body?.path || './tbl_localities.xlsx').toString();
+    const requested = (req.body?.path || '').toString().trim();
+    const cwd = process.cwd();
+    const candidates = [];
+    if (requested) candidates.push(requested);
+    candidates.push('/data/tbl_localities.xlsx');
+    candidates.push('./tbl_localities.xlsx');
+    candidates.push(require('node:path').join(cwd, 'tbl_localities.xlsx'));
+    candidates.push(require('node:path').join(cwd, 'data', 'tbl_localities.xlsx'));
+    const found = candidates.find(p => { try { return fs.existsSync(p) } catch { return false } });
+    if (!found) {
+      return res.status(404).json({ error: 'xlsx not found', tried: candidates });
+    }
     const mod = await import('../tools/rebuild_from_xlsx_preserve_recent.js');
     const func = mod.runRebuild || mod.default;
     if (typeof func !== 'function') return res.status(500).json({ error: 'rebuild function not available' });
-    await func(p);
-    return res.json({ ok: true, path: p });
+    await func(found);
+    // Best-effort copy into /data for future runs
+    try {
+      const dest = '/data/tbl_localities.xlsx';
+      if (found !== dest) { fs.copyFileSync(found, dest) }
+    } catch {}
+    return res.json({ ok: true, path: found });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }
