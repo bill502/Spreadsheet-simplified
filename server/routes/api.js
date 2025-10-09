@@ -432,14 +432,61 @@ router.post('/admin/import', requireRole('admin'), upload.single('file'), (req, 
   }
 });
 
+// Localities-only import (does not touch people), admin only
+router.post('/admin/localities/import', requireRole('admin'), upload.single('file'), (req, res) => {
+  try {
+    let filePath = req.file?.path;
+    if (!filePath){
+      const p = (req.body?.path || '').toString().trim();
+      if (!p) return res.status(400).json({ error: 'Provide file via multipart field "file" or JSON body { path }' });
+      filePath = path.resolve(p);
+    }
+    const wb = XLSX.readFile(filePath);
+    const sheetName = wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const set = new Map();
+    for (const r of data){
+      const name = String(r['LocalityName']||'').trim();
+      if(!name) continue;
+      const pp = sanitizePPUC(r['PP']);
+      const uc = sanitizePPUC(r['UC']);
+      const key = name.toLowerCase();
+      if(!set.has(key)) set.set(key, { name, pp, uc });
+    }
+    const tx = db.transaction(() => {
+      db.exec('CREATE TABLE IF NOT EXISTS localities (id INTEGER PRIMARY KEY, name TEXT UNIQUE, alias TEXT, pp TEXT, uc TEXT)');
+      const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(@name, @alias, @pp, @uc) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
+      for (const v of set.values()) ins.run({ name: v.name, alias: '', pp: v.pp ?? '', uc: v.uc ?? '' });
+    });
+    tx();
+    return res.json({ ok: true, sheet: sheetName, imported: set.size });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 // --- Localities endpoints ---
 router.get('/localities', (req, res) => {
   const q = (req.query.q || '').toString().trim().toLowerCase();
-  let items;
-  if (q) {
-    items = db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`);
-  } else {
-    items = db.prepare('SELECT id, name, alias, pp, uc FROM localities ORDER BY name LIMIT 2000').all();
+  const query = () => q
+    ? db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`)
+    : db.prepare('SELECT id, name, alias, pp, uc FROM localities ORDER BY name LIMIT 2000').all();
+  let items = [];
+  try { items = query() } catch {}
+  if (!items || items.length === 0) {
+    // Attempt on-demand seed from people if available
+    try {
+      db.exec('CREATE TABLE IF NOT EXISTS localities (id INTEGER PRIMARY KEY, name TEXT UNIQUE, alias TEXT, pp TEXT, uc TEXT)');
+      const sanitize = (v) => { if (v==null) return ''; if (typeof v==='number') return String(Math.trunc(v)); const s=String(v).trim(); return s.includes('.')? s.split('.')[0] : s };
+      const rows = db.prepare("SELECT DISTINCT COALESCE([LocalityName],[Locality]) AS name, [PP] AS pp, [UC] AS uc FROM people WHERE COALESCE([LocalityName],[Locality]) IS NOT NULL AND TRIM(COALESCE([LocalityName],[Locality]))<>''").all();
+      const tx = db.transaction((list)=>{
+        const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
+        for (const r of list) { ins.run(String(r.name).trim(), '', sanitize(r.pp), sanitize(r.uc)) }
+      });
+      if (rows && rows.length) { tx(rows) }
+      items = query();
+    } catch {}
   }
   return res.json({ items });
 });
