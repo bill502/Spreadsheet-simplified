@@ -127,6 +127,25 @@ router.post('/row/:id', requireRole('editor'), (req, res) => {
   const fields = {};
   for (const [k, v] of Object.entries(body)) { if (k !== 'rowNumber') fields[k] = normalizeFieldValue(k, v); }
   if (Object.keys(fields).length === 0) return res.status(400).json({ error: 'Empty body' });
+  // Enforce PP/UC from locality for non-admins; do not allow manual PP/UC changes by editors
+  const sess = getSession(req);
+  const isAdmin = !!sess && roleGE(sess.role, 'admin');
+  // Normalize locality key
+  const localityKey = (fields.LocalityName !== undefined) ? 'LocalityName' : ((fields.Locality !== undefined) ? 'Locality' : null);
+  if (!isAdmin) {
+    if ('PP' in fields) delete fields.PP;
+    if ('UC' in fields) delete fields.UC;
+  }
+  if (localityKey) {
+    const locName = String(fields[localityKey] ?? '').trim();
+    if (locName) {
+      const loc = db.prepare('SELECT name, pp, uc FROM localities WHERE name = ?').get(locName);
+      if (loc) {
+        fields.PP = loc.pp;
+        fields.UC = loc.uc;
+      }
+    }
+  }
   ensureColumns(fields);
   const before = JSON.stringify(getRowByNumber(n));
   const sets = Object.keys(fields).map(k => `[${k.replace(']', ']]')}] = @${k.replace(/[^A-Za-z0-9_]/g, '_')}`);
@@ -135,7 +154,6 @@ router.post('/row/:id', requireRole('editor'), (req, res) => {
   db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE rowNumber = @n`).run(params);
   const afterRow = getRowByNumber(n);
   const after = JSON.stringify(afterRow);
-  const sess = getSession(req);
   db.prepare(`INSERT INTO audit(ts,user,action,rowNumber,details,before,after)
     VALUES(@ts,@u,'update',@n,@d,@b,@a)`).run({ ts: new Date().toISOString(), u: sess?.user || '', n, d: Object.keys(fields).join(','), b: before, a: after });
   return res.json(afterRow);
@@ -389,8 +407,57 @@ router.post('/admin/import', requireRole('admin'), upload.single('file'), (req, 
     const sheetName = wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
     const result = importFromWorksheet(ws);
+    // Populate localities from unique LocalityName/PP/UC
+    try {
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const set = new Map();
+      for (const r of data){
+        const name = String(r['LocalityName']||'').trim();
+        if(!name) continue;
+        const pp = sanitizePPUC(r['PP']);
+        const uc = sanitizePPUC(r['UC']);
+        const key = name.toLowerCase();
+        if(!set.has(key)) set.set(key, { name, pp, uc });
+      }
+      const tx2 = db.transaction(() => {
+        db.exec('CREATE TABLE IF NOT EXISTS localities (id INTEGER PRIMARY KEY, name TEXT UNIQUE, alias TEXT, pp TEXT, uc TEXT)');
+        const ins = db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(@name, @alias, @pp, @uc) ON CONFLICT(name) DO UPDATE SET pp=excluded.pp, uc=excluded.uc');
+        for (const v of set.values()) ins.run({ name: v.name, alias: '', pp: v.pp ?? '', uc: v.uc ?? '' });
+      });
+      tx2();
+    } catch {}
     return res.json({ ok: true, sheet: sheetName, ...result });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }
+});
+
+// --- Localities endpoints ---
+router.get('/localities', (req, res) => {
+  const q = (req.query.q || '').toString().trim().toLowerCase();
+  let items;
+  if (q) {
+    items = db.prepare('SELECT id, name, alias, pp, uc FROM localities WHERE lower(name) LIKE ? ORDER BY name LIMIT 1000').all(`%${q}%`);
+  } else {
+    items = db.prepare('SELECT id, name, alias, pp, uc FROM localities ORDER BY name LIMIT 2000').all();
+  }
+  return res.json({ items });
+});
+
+router.post('/admin/locality', requireRole('admin'), (req, res) => {
+  const b = req.body || {};
+  const name = (b.name||'').toString().trim();
+  const alias = (b.alias||'').toString();
+  const pp = sanitizePPUC(b.pp);
+  const uc = sanitizePPUC(b.uc);
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.prepare('CREATE TABLE IF NOT EXISTS localities (id INTEGER PRIMARY KEY, name TEXT UNIQUE, alias TEXT, pp TEXT, uc TEXT)').run();
+  db.prepare('INSERT INTO localities(name, alias, pp, uc) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET alias=excluded.alias, pp=excluded.pp, uc=excluded.uc').run(name, alias, pp ?? '', uc ?? '');
+  return res.json({ ok: true });
+});
+
+router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
+  const name = decodeURIComponent(req.params.name||'');
+  const x = db.prepare('DELETE FROM localities WHERE name = ?').run(name);
+  return res.json({ ok: true, deleted: x.changes });
 });

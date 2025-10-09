@@ -35,8 +35,8 @@ function renderTable(items) {
   tbody.innerHTML = '';
   if (!items || items.length === 0) return;
 
-  // Only show: Name, Phone, UC, PP, Locality, Address
-  const headers = ['Name','Phone','UC','PP','Locality','Address'];
+  // Only show: Name, Phone, PP, UC, Locality, Address (order updated)
+  const headers = ['Name','Phone','PP','UC','Locality','Address'];
   const trHead = document.createElement('tr');
   headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; trHead.appendChild(th); });
   thead.appendChild(trHead);
@@ -55,8 +55,8 @@ function renderTable(items) {
       const cells = [
         getFirst(row, nameKeys) || 'Unknown',
         getFirst(row, phoneKeys),
-        getFirst(row, ucKeys),
         getFirst(row, ppKeys),
+        getFirst(row, ucKeys),
         getFirst(row, locKeys),
         getFirst(row, addrKeys),
       ];
@@ -191,15 +191,23 @@ function renderDetails() {
   const readOnly = new Set(['ID','new ID','CallDate','VisitDate','LCDate']);
   const keys = Array.from(new Set([...Object.keys(d).filter(k => k !== 'rowNumber'), 'LawyerForum']));
   const all = document.createElement('div'); all.className='grid-fields'; all.style.marginTop='10px';
+  const isAdmin = (state.role === 'admin');
   keys.forEach(k => {
     const wrap = document.createElement('div'); wrap.className = 'field';
     const label = document.createElement('label'); label.textContent = k;
-    const input = document.createElement('input'); input.type = 'text'; input.value = d[k] == null ? '' : String(d[k]);
-    input.dataset.key = k;
-    if (readOnly.has(k)) { input.readOnly = true; input.disabled = true; }
-    wrap.appendChild(label); wrap.appendChild(input); all.appendChild(wrap);
-  });
-  fields.appendChild(all);
+    if (k === 'Locality' || k === 'LocalityName') {
+      const sel = document.createElement('select'); sel.id = 'localitySelect';
+      const optEmpty = document.createElement('option'); optEmpty.value=''; optEmpty.textContent='(select locality)'; sel.appendChild(optEmpty);
+      (state.localities||[]).forEach(loc => { const o=document.createElement('option'); o.value=loc.name; o.textContent=loc.name; if(String(d[k]||'')===loc.name) o.selected=true; sel.appendChild(o) });
+      wrap.appendChild(label); wrap.appendChild(sel); all.appendChild(wrap);
+    } else {
+      const input = document.createElement('input'); input.type = 'text'; input.value = d[k] == null ? '' : String(d[k]);
+      input.dataset.key = k;
+      if (readOnly.has(k)) { input.readOnly = true; input.disabled = true; }
+      if (!isAdmin && (k === 'PP' || k === 'UC' || k === 'Alias')) { input.readOnly = true; input.disabled = true; }
+      wrap.appendChild(label); wrap.appendChild(input); all.appendChild(wrap);
+    }
+  });fields.appendChild(all);
 
   const row = document.createElement('div'); row.className='row'; row.style.marginTop='8px';
   const btnDone = document.createElement('button'); btnDone.className='secondary'; btnDone.textContent='Done';
@@ -212,6 +220,9 @@ async function saveChanges() {
   const inputs = el('fields').querySelectorAll('input[data-key]');
   const payload = {};
   inputs.forEach(i => payload[i.dataset.key] = i.value);
+  // If a locality select exists and is set, send LocalityName and let server map PP/UC
+  const sel = el('localitySelect');
+  if (sel && sel.value) { payload['LocalityName'] = sel.value }
   const updated = await api(`/api/row/${state.selectedRowNumber}`, { method: 'POST', body: JSON.stringify(payload) });
   state.selectedData = updated;
   renderDetails();
@@ -299,6 +310,8 @@ function bind() {
 (async function init() {
   try {
     bind();
+    // Load localities for dropdowns
+    try { const loc = await api('/api/localities'); state.localities = loc.items || [] } catch {}
     await loadColumns();
     const limitInput = el('limit'); if (limitInput) limitInput.value = '50';
     await refreshUser();
@@ -320,3 +333,4 @@ function renderAuth(){
   const linkRep = el('linkReports'); if (linkRep) linkRep.style.display = (state.role === 'editor' || state.role === 'admin') ? '' : 'none';
   const loginPanel = el('loginPanel'); if (loginPanel) loginPanel.style.display = state.user ? 'none' : loginPanel.style.display;
 }
+
