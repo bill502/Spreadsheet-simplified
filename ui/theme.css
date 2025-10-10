@@ -23,6 +23,7 @@ body {
   line-height: 1.45;
 }
 
+
 header {
   position: sticky; top: 0; z-index: 30;
   padding: 12px 16px;
@@ -78,4 +79,5 @@ tbody tr:nth-child(even) { background: #151515 }
 /* Print-friendly defaults: hidden; per-page overrides may re-enable */
 @media print {
   body { background: #fff; color: #000 }
+  
 }

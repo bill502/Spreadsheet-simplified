@@ -52,15 +52,38 @@ function renderTable(items) {
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.addEventListener('click', () => selectRow(row.rowNumber));
-      const cells = [
-        getFirst(row, nameKeys) || 'Unknown',
-        getFirst(row, phoneKeys),
-        getFirst(row, ppKeys),
-        getFirst(row, ucKeys),
-        getFirst(row, locKeys),
-        getFirst(row, addrKeys),
-      ];
-    cells.forEach(txt => { const td = document.createElement('td'); td.textContent = txt || ''; tr.appendChild(td); });
+    const phoneText = getFirst(row, phoneKeys);
+    const toTel = (s) => {
+      if (!s) return '';
+      const t = String(s).trim();
+      // keep leading + and digits
+      const m = t.match(/^\+?[0-9][0-9\s\-()]*$/) ? t : t.replace(/[^0-9+]/g, '');
+      // collapse spaces and dashes
+      return m.replace(/[\s\-()]/g, '');
+    };
+    const phoneNode = (() => {
+      if (!phoneText) return null;
+      const tel = toTel(phoneText);
+      if (!tel) return null;
+      const a = document.createElement('a');
+      a.href = `tel:${tel}`;
+      a.textContent = phoneText;
+      a.addEventListener('click', (e) => e.stopPropagation());
+      return a;
+    })();
+    const cells = [
+      getFirst(row, nameKeys) || 'Unknown',
+      phoneNode || (phoneText || ''),
+      getFirst(row, ppKeys),
+      getFirst(row, ucKeys),
+      getFirst(row, locKeys),
+      getFirst(row, addrKeys),
+    ];
+    cells.forEach(val => {
+      const td = document.createElement('td');
+      if (val instanceof Node) td.appendChild(val); else td.textContent = val || '';
+      tr.appendChild(td);
+    });
     tbody.appendChild(tr);
   });
 }
