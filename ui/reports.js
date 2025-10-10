@@ -26,37 +26,40 @@ function buildQuery(){ const p=new URLSearchParams(); const v=(id)=> (el(id)?.va
   return p.toString();
 }
 
-// Render results table with curated columns
+// Render results table with curated columns and width distribution favoring long text columns
 function render(items){
-  const thead=el('thead'); const tbody=el('tbody'); thead.innerHTML=''; tbody.innerHTML='';
+  const thead=el('thead'); const tbody=el('tbody'); const colg=el('colgroup');
+  thead.innerHTML=''; tbody.innerHTML=''; if(colg) colg.innerHTML='';
   const nameKeys = ['Name','LAWYERNAME','LawyerName','Full Name','FullName','Alias'];
   const phoneKeys = ['Phone','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
   const ucKeys = ['UC','Uc','Union Council','UnionCouncil'];
   const ppKeys = ['PP','Pp'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];
   const addrKeys = ['ADDRESS','Address','HighlightedAddress'];
-  const shown=['Name','Phone','UC','PP','Locality','Address','Called','CallDate','Visited','VisitDate','ConfirmedVoter','Comments'];
+  // Columns: remove Called/Visited booleans and ConfirmedVoter; keep dates
+  const shown=['Name','Phone','UC/PP','Locality','Address','Call Date','Visit Date','Comments'];
+  // Widths sum to 100%; favor long-text (Address), slightly increase Phone; combine UC/PP
+  const widths=['15%','10%','9%','10%','23%','8%','8%','17%'];
+  if (colg) widths.forEach(w=>{ const c=document.createElement('col'); c.style.width=w; colg.appendChild(c) });
   shown.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th) });
   items.forEach(row=>{
     const tr=document.createElement('tr');
-    const called = isTrueish(row.Called) ? 'Yes' : 'No';
-    const visited = isTrueish(row.Visited) ? 'Yes' : 'No';
-    const voter = isTrueish(row.ConfirmedVoter) ? 'Yes' : 'No';
+    const callDate = getFirst(row, ['CallDate','CALLDATE','Call Date','CALL DATE']);
+    const visitDate = getFirst(row, ['VisitDate','VISITDATE','Visit Date','VISIT DATE']);
+    const ucVal = getFirst(row, ['UC','Uc','Union Council','UnionCouncil']);
+    const ppVal = getFirst(row, ['PP','Pp']);
+    const ucpp = (ucVal || ppVal) ? `${ucVal||''}\n${ppVal||''}` : '';
     const cells=[
       getFirst(row, nameKeys) || 'Unknown',
       getFirst(row, phoneKeys),
-      getFirst(row, ucKeys),
-      getFirst(row, ppKeys),
+      ucpp,
       getFirst(row, locKeys),
       getFirst(row, addrKeys),
-      called,
-      row.CallDate || '',
-      visited,
-      row.VisitDate || '',
-      voter,
+      callDate || '',
+      visitDate || '',
       (row.Comments || '')
     ];
-    cells.forEach(t=>{ const td=document.createElement('td'); td.textContent=t||''; tr.appendChild(td) });
+    cells.forEach((t,i)=>{ const td=document.createElement('td'); td.textContent=t||''; if(i===2||i===7) td.style.whiteSpace='pre-wrap'; tr.appendChild(td) });
     tbody.appendChild(tr)
   });
   el('resultsPanel').style.display = items.length? 'block':'none';
@@ -86,4 +89,12 @@ function bind(){
   });
 }
 
-(async function init(){ try{ bind(); const ok = await ensureEditor(); if(!ok) return } catch(e){ toast(`Init failed: ${e.message}`) } })();
+(async function init(){
+  try{
+    bind();
+    const ok = await ensureEditor();
+    if(!ok) return;
+    // Auto-run a default report on load for convenience
+    await runReport();
+  } catch(e){ toast(`Init failed: ${e.message}`) }
+})();

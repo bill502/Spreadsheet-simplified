@@ -153,6 +153,16 @@ function renderDetails() {
   topRow.append(calledWrap, calledDate, visitedWrap, visitedDate, voterWrap, forumInput, idBadge);
   fields.appendChild(topRow);
 
+  // Comments area (readable + directly editable)
+  const commentsBlock = document.createElement('div'); commentsBlock.style.marginTop = '8px';
+  const commentsLabel = document.createElement('label'); commentsLabel.textContent = 'Comments'; commentsLabel.className = 'muted'; commentsLabel.style.display = 'block'; commentsLabel.style.marginBottom = '4px';
+  const commentsArea = document.createElement('textarea'); commentsArea.rows = 4; commentsArea.style.width = '100%'; commentsArea.placeholder = 'Comments...';
+  commentsArea.value = d.Comments ? String(d.Comments) : '';
+  commentsArea.dataset.key = 'Comments';
+  commentsArea.readOnly = !canEdit; commentsArea.disabled = !canEdit;
+  commentsBlock.append(commentsLabel, commentsArea);
+  fields.appendChild(commentsBlock);
+
   const todayISO = () => new Date().toLocaleDateString('en-CA');
   if (canEdit) cbCalled.addEventListener('change', async () => {
     try {
@@ -189,7 +199,7 @@ function renderDetails() {
 
   // Full editable grid (edit mode)
   const readOnly = new Set(['ID','new ID','CallDate','VisitDate','LCDate']);
-  const hideKeys = new Set(['Status','HighlightedAddress']);
+  const hideKeys = new Set(['Status','HighlightedAddress','Comments']);
   const keys = Array.from(new Set([...Object.keys(d).filter(k => k !== 'rowNumber' && !hideKeys.has(k)), 'LawyerForum']));
   // Render editable inputs with Locality dropdown and admin-only PP/UC edit
   const all = document.createElement('div'); all.className='grid-fields'; all.style.marginTop='10px';
@@ -219,7 +229,7 @@ function renderDetails() {
 
 async function saveChanges() {
   if (!state.selectedRowNumber) return;
-  const inputs = el('fields').querySelectorAll('input[data-key]');
+  const inputs = el('fields').querySelectorAll('input[data-key], textarea[data-key]');
   const payload = {};
   inputs.forEach(i => payload[i.dataset.key] = i.value);
   // If a locality select exists and is set, send LocalityName and let server map PP/UC
@@ -230,15 +240,7 @@ async function saveChanges() {
   renderDetails();
 }
 
-async function addComment() {
-  if (!state.selectedRowNumber) return;
-  const txt = el('comment').value.trim();
-  if (!txt) return;
-  const updated = await api(`/api/row/${state.selectedRowNumber}/comment`, { method: 'POST', body: JSON.stringify({ comment: txt }) });
-  el('comment').value = '';
-  state.selectedData = updated;
-  renderDetails();
-}
+// addComment removed — comments are edited directly and saved with Save Changes
 
 function showCreateForm() {
   state.creating = true;
@@ -279,7 +281,7 @@ function bind() {
   el('query').addEventListener('input', debounced);
   el('btnSave').addEventListener('click', () => saveChanges().catch(e => toast(e.message)));
   el('btnReload').addEventListener('click', () => selectRow(state.selectedRowNumber).catch(e => toast(e.message)));
-  el('btnComment').addEventListener('click', () => addComment().catch(e => toast(e.message)));
+  // No separate Add Comment button; comments are edited inline
   el('btnNew').addEventListener('click', () => showCreateForm());
   el('btnCreate').addEventListener('click', () => createEntry().catch(e => toast(e.message)));
   el('btnCancelCreate').addEventListener('click', () => hideCreateForm());

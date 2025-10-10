@@ -22,6 +22,9 @@ try {
   try { db.exec('UPDATE people SET HighlightedAddress=NULL'); } catch {}
   try { db.exec("UPDATE people SET PP = CAST(PP AS INTEGER) WHERE PP IS NOT NULL AND TRIM(PP)<>''"); } catch {}
   try { db.exec("UPDATE people SET UC = CAST(UC AS INTEGER) WHERE UC IS NOT NULL AND TRIM(UC)<>''"); } catch {}
+  try { db.exec("UPDATE people SET Called = CAST(Called AS INTEGER) WHERE Called IS NOT NULL AND TRIM(Called)<>''"); } catch {}
+  try { db.exec("UPDATE people SET Visited = CAST(Visited AS INTEGER) WHERE Visited IS NOT NULL AND TRIM(Visited)<>''"); } catch {}
+  try { db.exec("UPDATE people SET ConfirmedVoter = CAST(ConfirmedVoter AS INTEGER) WHERE ConfirmedVoter IS NOT NULL AND TRIM(ConfirmedVoter)<>''"); } catch {}
 } catch {}
 
 // Seed localities from existing people if localities table is empty

@@ -48,13 +48,15 @@ function normalizeFieldValue(name, value) {
 
 function ensureColumns(fields) {
   if (!fields) return;
-  const cols = new Set(getColumns());
+  const existing = getColumns().map(c => String(c));
+  const colsLower = new Set(existing.map(c => c.toLowerCase()));
   for (const k of Object.keys(fields)) {
     if (k === 'rowNumber') continue;
-    if (!cols.has(k)) {
-      const safe = k.replace(']', ']]');
+    const kl = String(k).toLowerCase();
+    if (!colsLower.has(kl)) {
+      const safe = String(k).replace(']', ']]');
       db.prepare(`ALTER TABLE people ADD COLUMN [${safe}] TEXT`).run();
-      cols.add(k);
+      colsLower.add(kl);
     }
   }
 }

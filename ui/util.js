@@ -9,11 +9,14 @@ function debounce(fn, wait=400){ let t; return (...args)=>{ clearTimeout(t); t=s
 
 // Normalize DB-ish truthy values to boolean (supports 1/0, "1"/"0", yes/no)
 function isTrueish(v){
-  if (v === true || v === 1) return true;
+  if (v === true) return true;
   if (v === false || v === 0 || v === null || v === undefined) return false;
+  if (typeof v === 'number') return v !== 0;
   const s = String(v).trim().toLowerCase();
   if (s === '' || s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
   if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
+  const num = Number(s);
+  if (!Number.isNaN(num)) return num !== 0;
   return false;
 }
 
@@ -30,4 +33,3 @@ async function api(path, opts={}){
 
 // Export to window for inline scripts
 window.el = el; window.debounce = debounce; window.isTrueish = isTrueish; window.toast = toast; window.api = api;
-

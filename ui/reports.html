@@ -11,6 +11,7 @@
       #resultsPanel table thead th{ background:#1b1b1b }
       #resultsPanel table{ table-layout: fixed }
       #resultsPanel table th, #resultsPanel table td{ word-break: break-word; white-space: normal }
+      #resultsPanel table thead th{ white-space: nowrap }
       @media print{
         @page { margin: 12mm }
         header, #quickPanel, #advancedPanel, #btnToggleAdvanced, #btnRun, #btnPrint { display:none !important }
@@ -25,6 +26,8 @@
         thead{ display: table-header-group }
         tfoot{ display: table-footer-group }
         th,td{ border-bottom:1px solid #ccc; color:black }
+        #meta { display: none !important }
+        thead th{ background:#fff !important; color:#000 !important; white-space: nowrap }
       }
     </style>
   </head>
@@ -103,6 +106,7 @@
           <div class="muted" id="meta"></div>
           <div style="overflow:auto; max-height:60vh">
             <table>
+              <colgroup id="colgroup"></colgroup>
               <thead><tr id="thead"></tr></thead>
               <tbody id="tbody"></tbody>
             </table>
