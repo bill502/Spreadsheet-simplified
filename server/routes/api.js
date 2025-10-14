@@ -122,18 +122,31 @@ router.get('/search', (req, res) => {
     const total = db.prepare('SELECT COUNT(*) AS c FROM people').get().c;
     return res.json({ total, items });
   }
-  let likeCols = [];
-  if (by === 'uc') likeCols = ['UC', 'Uc'];
-  else if (by === 'pp') likeCols = ['PP', 'Pp'];
-  else if (by === 'locality') likeCols = ['Locality', 'LocalityName'];
-  else likeCols = cols.filter(c => c && c !== 'rowNumber');
-  likeCols = likeCols.filter(c => cols.includes(c));
-  if (likeCols.length === 0) {
-    return res.json({ total: 0, items: [] });
+  // Build conditions
+  let conds = '';
+  let params = { l: limit, o: offset };
+  if (by === 'uc' || by === 'pp') {
+    // Exact numeric match for UC/PP: avoid substring matches (e.g., 23 should not match 233)
+    const digits = q.replace(/[^0-9]/g, '');
+    const num = digits ? parseInt(digits, 10) : NaN;
+    if (!Number.isFinite(num)) return res.json({ total: 0, items: [] });
+    const targets = (by === 'uc') ? ['UC','Uc'] : ['PP','Pp'];
+    const present = targets.filter(c => cols.includes(c));
+    if (present.length === 0) return res.json({ total: 0, items: [] });
+    const parts = present.map(c => `CAST([${c.replace(']', ']]')}] AS INTEGER) = @n`);
+    conds = parts.join(' OR ');
+    params.n = num;
+  } else {
+    let likeCols = [];
+    if (by === 'locality') likeCols = ['Locality', 'LocalityName'];
+    else likeCols = cols.filter(c => c && c !== 'rowNumber');
+    likeCols = likeCols.filter(c => cols.includes(c));
+    if (likeCols.length === 0) return res.json({ total: 0, items: [] });
+    conds = likeCols.map(c => `[${c}] LIKE @pat`).join(' OR ');
+    params.pat = `%${q}%`;
   }
-  const conds = likeCols.map(c => `[${c}] LIKE @pat`).join(' OR ');
-  const itemsRaw = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY ${orderExpr} ${dir} LIMIT @l OFFSET @o`).all({ pat: `%${q}%`, l: limit, o: offset });
-  const total = db.prepare(`SELECT COUNT(*) AS c FROM people WHERE ${conds}`).get({ pat: `%${q}%` }).c;
+  const itemsRaw = db.prepare(`SELECT * FROM people WHERE ${conds} ORDER BY ${orderExpr} ${dir} LIMIT @l OFFSET @o`).all(params);
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM people WHERE ${conds}`).get(params).c;
   const items = itemsRaw.map(formatOutRow);
   return res.json({ total, items });
 });
