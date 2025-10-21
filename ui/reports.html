@@ -75,6 +75,16 @@
           <div class="row" style="margin-top:10px">
             <button id="btnToggleAdvanced" class="ghost">Advanced Filters</button>
             <span class="spacer"></span>
+            <label class="row" style="gap:6px"><input type="checkbox" id="fConfirmed" /> <span class="muted">Confirmed voters only</span></label>
+            <label class="row" style="gap:6px">
+              <span class="muted">Group by</span>
+              <select id="fGroupBy">
+                <option value="none">None</option>
+                <option value="pp">PP</option>
+                <option value="uc">UC</option>
+                <option value="locality">Locality</option>
+              </select>
+            </label>
             <button id="btnRun">Generate Report</button>
             <button id="btnPrint" class="ghost">Print</button>
           </div>

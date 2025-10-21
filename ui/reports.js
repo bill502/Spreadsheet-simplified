@@ -23,6 +23,7 @@ function buildQuery(){ const p=new URLSearchParams(); const v=(id)=> (el(id)?.va
   add('byUser', v('fByUser'));
   add('uc', v('fUC')); add('locality', v('fLocality')); add('pp', v('fPP'));
   const lim = v('fLimit'); if(lim) add('limit', lim);
+  const confirmed = el('fConfirmed'); if (confirmed && confirmed.checked) add('confirmed', 'true');
   return p.toString();
 }
 
@@ -42,7 +43,24 @@ function render(items){
   const widths=['15%','10%','9%','10%','23%','8%','8%','17%'];
   if (colg) widths.forEach(w=>{ const c=document.createElement('col'); c.style.width=w; colg.appendChild(c) });
   shown.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th) });
-  items.forEach(row=>{
+  // Optional grouping
+  const groupBySel = (el('fGroupBy')?.value || 'none').toLowerCase();
+  const groupKey = (row) => {
+    if (groupBySel === 'pp') return getFirst(row, ppKeys) || '(No PP)';
+    if (groupBySel === 'uc') return getFirst(row, ucKeys) || '(No UC)';
+    if (groupBySel === 'locality') return getFirst(row, locKeys) || '(No Locality)';
+    return null;
+  };
+  const groups = new Map();
+  if (groupBySel !== 'none') {
+    items.forEach(row => {
+      const k = groupKey(row);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(row);
+    });
+  }
+
+  const renderRow = (row) => {
     const tr=document.createElement('tr');
     const callDate = getFirst(row, ['CallDate','CALLDATE','Call Date','CALL DATE']);
     const visitDate = getFirst(row, ['VisitDate','VISITDATE','Visit Date','VISIT DATE']);
@@ -61,7 +79,21 @@ function render(items){
     ];
     cells.forEach((t,i)=>{ const td=document.createElement('td'); td.textContent=t||''; if(i===2||i===7) td.style.whiteSpace='pre-wrap'; tr.appendChild(td) });
     tbody.appendChild(tr)
-  });
+  };
+
+  if (groupBySel === 'none') {
+    items.forEach(renderRow);
+  } else {
+    // Order groups by natural order of key
+    const orderedKeys = Array.from(groups.keys()).sort((a,b)=> String(a).localeCompare(String(b), undefined, { numeric:true }));
+    const colspan = shown.length;
+    orderedKeys.forEach(key => {
+      const headerTr = document.createElement('tr');
+      const headerTd = document.createElement('td'); headerTd.colSpan = colspan; headerTd.textContent = `${key} — ${groups.get(key).length} item(s)`; headerTd.className = 'muted'; headerTd.style.fontWeight='600'; headerTd.style.padding = '6px 10px';
+      headerTr.appendChild(headerTd); tbody.appendChild(headerTr);
+      groups.get(key).forEach(renderRow);
+    });
+  }
   el('resultsPanel').style.display = items.length? 'block':'none';
   const meta=el('meta'); if(meta) meta.textContent = `Showing ${items.length} row(s)`
 }

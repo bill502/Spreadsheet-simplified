@@ -347,6 +347,11 @@ router.get('/reports', requireRole('editor'), (req, res) => {
   addLike(q.pp, ['PP','Pp'], 'pp');
   addLike(q.locality, ['Locality','LocalityName'], 'loc');
 
+  // Confirmed voters filter
+  if (q.confirmed && String(q.confirmed).toLowerCase() !== 'false') {
+    conds.push('CAST([ConfirmedVoter] AS INTEGER) = 1');
+  }
+
   // Modified filters via audit
   const sess = getSession(req);
   const auditConds = ["action = 'update'"];
