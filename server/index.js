@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import db, { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
 import crypto from 'node:crypto';
+import XLSX from 'xlsx';
 
 dotenv.config();
 initDb();
@@ -53,7 +54,43 @@ try {
       } catch {}
     } catch (e) { console.warn('[boot] LAWYERNAME backfill failed:', e?.message || e) }
   };
+  const fillNamesFromAppendByPhone = () => {
+    try {
+      const dir = './append';
+      if (!fs.existsSync(dir)) return;
+      const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx'));
+      if (!files.length) return;
+      const getDigits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g, '') };
+      const pick = (obj, keys) => { for (const k of keys){ const v = obj?.[k]; if (v!=null && String(v).trim()!=='') return String(v).trim() } return '' };
+      const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
+      const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
+      const byPhone = new Map();
+      for (const f of files){
+        try {
+          const wb = XLSX.readFile(path.join(dir,f));
+          const ws = wb.Sheets[ wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0] ];
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          for (const r of rows){
+            const nm = pick(r, nameKeys);
+            const ph = pick(r, phoneKeys);
+            const pd = getDigits(ph);
+            if (nm && pd) { if (!byPhone.has(pd)) byPhone.set(pd, nm) }
+          }
+        } catch {}
+      }
+      if (byPhone.size === 0) return;
+      const candidates = db.prepare("SELECT rowNumber, [PHONE] AS ph FROM people WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [PHONE] IS NOT NULL AND TRIM([PHONE])<>''").all();
+      const upd = db.prepare('UPDATE people SET [LAWYERNAME]=@v WHERE rowNumber=@n');
+      let fixed = 0;
+      const tx = db.transaction((list)=>{
+        for (const r of list){ const pd = getDigits(r.ph); const nm = byPhone.get(pd); if (nm){ upd.run({ v: nm, n: r.rowNumber }); fixed++; } }
+      });
+      tx(candidates);
+      console.log(`[boot] Phone-based name backfill applied: ${fixed}`);
+    } catch (e) { console.warn('[boot] Phone-based backfill failed:', e?.message || e) }
+  };
   backfillLawyerName();
+  fillNamesFromAppendByPhone();
 } catch {}
 
 // Seed localities from existing people if localities table is empty
@@ -113,8 +150,9 @@ try {
       if (typeof fn === 'function') {
         const res = await fn({ dir: './append', apply: true, patch: true, overwrite: true });
         console.log('[boot] Append result:', JSON.stringify(res));
-        // Run name backfill again in case newly appended rows have alternate headers
+        // Run name backfills again in case newly appended rows have alternate headers
         try { backfillLawyerName(); } catch {}
+        try { fillNamesFromAppendByPhone(); } catch {}
         try { fs.writeFileSync(marker, JSON.stringify({ digest: shouldRun.digest, at: new Date().toISOString(), result: { totalAfter: res?.totalAfter, patched: res?.patched } })) } catch {}
       }
     } catch (e) {
@@ -124,6 +162,7 @@ try {
     console.log('[boot] No append action needed');
     // Even if no append, ensure any residual empty LAWYERNAME is backfilled
     try { backfillLawyerName(); } catch {}
+    try { fillNamesFromAppendByPhone(); } catch {}
   }
 } catch (e) { console.warn('[boot] Append check failed:', e?.message || e) }
 
