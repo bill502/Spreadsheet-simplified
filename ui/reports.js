@@ -32,7 +32,7 @@ function render(items){
   const thead=el('thead'); const tbody=el('tbody'); const colg=el('colgroup');
   thead.innerHTML=''; tbody.innerHTML=''; if(colg) colg.innerHTML='';
   const nameKeys = ['Name','LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Full Name','FullName','Alias'];
-  const phoneKeys = ['Phone','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
+  const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
   const ucKeys = ['UC','Uc','Union Council','UnionCouncil'];
   const ppKeys = ['PP','Pp'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];

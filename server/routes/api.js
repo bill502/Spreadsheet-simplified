@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
+import XLSX from 'xlsx';
 // No path/url imports needed; XLSX flow removed
 
 const router = express.Router();
@@ -72,6 +73,22 @@ function formatOutRow(row){
   const r = { ...row };
   try { delete r.Status; } catch {}
   try { delete r.HighlightedAddress; } catch {}
+  // Normalize display phone: prefer canonical PHONE and digits-only with local leading 0
+  try {
+    const digits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g,'') };
+    const norm = (raw) => {
+      const d = digits(raw);
+      if (!d) return '';
+      if (d.startsWith('00923') && d.length >= 13) return '0' + d.slice(4, 14);
+      if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
+      if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
+      if (d.startsWith('3') && d.length === 10) return '0' + d;
+      return d;
+    };
+    const phones = [r.PHONE, r.Phone, r['Phone Number'], r.Mobile, r['Mobile Number'], r.Contact, r.Cell].filter(v => v!=null);
+    const n = norm(phones[0] ?? '');
+    if (n) r.PHONE = n;
+  } catch {}
   try { if (r.PP !== undefined && r.PP !== null) r.PP = sanitizePPUC(r.PP) ?? r.PP; } catch {}
   try { if (r.UC !== undefined && r.UC !== null) r.UC = sanitizePPUC(r.UC) ?? r.UC; } catch {}
   return r;
@@ -420,6 +437,82 @@ router.get('/_debug/tables', debugGuard, (req, res) => {
   }
 });
 
+// Admin-only: repair names and phones on demand
+router.post('/admin/repair-names-phones', requireRole('admin'), async (req, res) => {
+  try {
+    const info = db.prepare('PRAGMA table_info(people)').all();
+    const cols = info.map(r => String(r.name));
+    const has = (n) => cols.includes(n);
+    const digits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g,'') };
+    const normPhone = (raw) => {
+      const d = digits(raw);
+      if (!d) return '';
+      if (d.startsWith('00923') && d.length >= 13) return '0' + d.slice(4, 14);
+      if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
+      if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
+      if (d.startsWith('3') && d.length === 10) return '0' + d;
+      return d;
+    };
+    // Backfill names from name-like columns
+    const preferred = ['LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
+    const dynamic = cols.filter(c => {
+      const lc = String(c).toLowerCase();
+      if (lc === 'lawyername' || lc === 'rownumber' || lc === 'localityname') return false;
+      return lc.includes('name');
+    });
+    const order = Array.from(new Set([...preferred, ...dynamic]));
+    for (const col of order) {
+      if (!has(col)) continue;
+      const safe = col.replace(']', ']]');
+      db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [${safe}] IS NOT NULL AND TRIM([${safe}])<>''`);
+    }
+    // Normalize phone-like columns and set canonical PHONE
+    const phoneCols = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'].filter(has);
+    const rows = db.prepare('SELECT rowNumber, * FROM people').all();
+    const upd = db.prepare('UPDATE people SET [PHONE]=@p WHERE rowNumber=@n');
+    let changed = 0;
+    const tx = db.transaction((list)=>{
+      for (const r of list){
+        const vals = phoneCols.map(c => r[c]).filter(v => v!=null);
+        const nrm = vals.length ? normPhone(vals[0]) : '';
+        if (nrm && String(r.PHONE||'') !== nrm){ upd.run({ p: nrm, n: r.rowNumber }); changed++; }
+      }
+    });
+    tx(rows);
+    // Phone-based name from append
+    let fixedByPhone = 0;
+    try {
+      const dir = './append';
+      const files = require('node:fs').readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx'));
+      if (files && files.length){
+        const byPhone = new Map();
+        const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
+        const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
+        for (const f of files){
+          const wb = XLSX.readFile(require('node:path').join(dir,f));
+          const ws = wb.Sheets[ wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0] ];
+          const items = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          for (const it of items){
+            const nm = nameKeys.map(k => it[k]).find(v => v!=null && String(v).trim()!=='');
+            const ph = phoneKeys.map(k => it[k]).find(v => v!=null && String(v).trim()!=='');
+            const pd = normPhone(ph||'');
+            if (nm && pd && !byPhone.has(pd)) byPhone.set(pd, String(nm).trim());
+          }
+        }
+        const cand = db.prepare("SELECT rowNumber, [PHONE] AS ph FROM people WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [PHONE] IS NOT NULL AND TRIM([PHONE])<>''").all();
+        const u = db.prepare('UPDATE people SET [LAWYERNAME]=@v WHERE rowNumber=@n');
+        const tx2 = db.transaction((list)=>{
+          for (const r of list){ const pd = normPhone(r.ph); const nm = byPhone.get(pd); if (nm){ u.run({ v: nm, n: r.rowNumber }); fixedByPhone++; } }
+        });
+        tx2(cand);
+      }
+    } catch {}
+    const remain = db.prepare("SELECT COUNT(*) AS c FROM people WHERE [LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])=''").get().c;
+    return res.json({ ok: true, phonesNormalized: changed, namesFixedByPhone: fixedByPhone, remainingUnknown: remain });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
 // Debug XLSX info (admin or debug token)
 // XLSX debug removed — spreadsheet imports are no longer supported.
 

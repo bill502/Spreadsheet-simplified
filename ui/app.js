@@ -42,7 +42,7 @@ function renderTable(items) {
   thead.appendChild(trHead);
 
   const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
-  const phoneKeys = ['Phone','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
+  const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
   const ucKeys = ['UC','Uc','Union Council','UnionCouncil'];
   const ppKeys = ['PP','Pp'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];
