@@ -26,17 +26,20 @@ try {
   try { db.exec("UPDATE people SET Called = CAST(Called AS INTEGER) WHERE Called IS NOT NULL AND TRIM(Called)<>''"); } catch {}
   try { db.exec("UPDATE people SET Visited = CAST(Visited AS INTEGER) WHERE Visited IS NOT NULL AND TRIM(Visited)<>''"); } catch {}
   try { db.exec("UPDATE people SET ConfirmedVoter = CAST(ConfirmedVoter AS INTEGER) WHERE ConfirmedVoter IS NOT NULL AND TRIM(ConfirmedVoter)<>''"); } catch {}
-  // Backfill LAWYERNAME from common alternate headers if empty (idempotent)
-  try {
-    const cols = db.prepare('PRAGMA table_info(people)').all().map(r => String(r.name));
-    const has = (n) => cols.includes(n);
-    const tryFill = (col) => {
-      if (!has(col)) return;
-      const safe = col.replace(']', ']]');
-      db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [${safe}] IS NOT NULL AND TRIM([${safe}])<>''`);
-    };
-    ['Name','Full Name','FullName','Alias','LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES'].forEach(tryFill);
-  } catch {}
+  // Define helper for name backfill so we can run it after append too
+  const backfillLawyerName = () => {
+    try {
+      const cols = db.prepare('PRAGMA table_info(people)').all().map(r => String(r.name));
+      const has = (n) => cols.includes(n);
+      const tryFill = (col) => {
+        if (!has(col)) return;
+        const safe = col.replace(']', ']]');
+        db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [${safe}] IS NOT NULL AND TRIM([${safe}])<>''`);
+      };
+      ['Name','Full Name','FullName','Alias','LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES'].forEach(tryFill);
+    } catch {}
+  };
+  backfillLawyerName();
 } catch {}
 
 // Seed localities from existing people if localities table is empty
@@ -96,6 +99,8 @@ try {
       if (typeof fn === 'function') {
         const res = await fn({ dir: './append', apply: true, patch: true, overwrite: true });
         console.log('[boot] Append result:', JSON.stringify(res));
+        // Run name backfill again in case newly appended rows have alternate headers
+        try { backfillLawyerName(); } catch {}
         try { fs.writeFileSync(marker, JSON.stringify({ digest: shouldRun.digest, at: new Date().toISOString(), result: { totalAfter: res?.totalAfter, patched: res?.patched } })) } catch {}
       }
     } catch (e) {
@@ -103,6 +108,8 @@ try {
     }
   } else {
     console.log('[boot] No append action needed');
+    // Even if no append, ensure any residual empty LAWYERNAME is backfilled
+    try { backfillLawyerName(); } catch {}
   }
 } catch (e) { console.warn('[boot] Append check failed:', e?.message || e) }
 
