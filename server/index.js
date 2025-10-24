@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 
 import db, { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 dotenv.config();
@@ -69,7 +68,7 @@ try {
     if (files.length === 0) return false;
     const h = crypto.createHash('sha256');
     for (const f of files) {
-      const p = require('node:path').join(dir, f);
+      const p = path.join(dir, f);
       try { const st = fs.statSync(p); h.update(f + ':' + st.size + ':' + st.mtimeMs); } catch {}
     }
     const digest = h.digest('hex');
