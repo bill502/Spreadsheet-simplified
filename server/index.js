@@ -89,8 +89,37 @@ try {
       console.log(`[boot] Phone-based name backfill applied: ${fixed}`);
     } catch (e) { console.warn('[boot] Phone-based backfill failed:', e?.message || e) }
   };
+  const normalizePhones = () => {
+    try {
+      const digits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g,'') };
+      const norm = (raw) => {
+        const d = digits(raw);
+        if (!d) return '';
+        // Pakistan mobile normalization
+        if (d.startsWith('00923') && d.length >= 13) return '0' + d.slice(4, 14);
+        if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
+        if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
+        if (d.startsWith('3') && d.length === 10) return '0' + d;
+        // Fallback to first 11 if it looks like mobile
+        if (d.length > 11 && d.includes('3')) {
+          const i = d.indexOf('3');
+          if (i >= 0 && i + 11 <= d.length) return ('0' + d.slice(i, i+10)).slice(0,11);
+        }
+        return d;
+      };
+      const rows = db.prepare('SELECT rowNumber, [PHONE] AS p FROM people WHERE [PHONE] IS NOT NULL AND TRIM([PHONE])<>""').all();
+      const upd = db.prepare('UPDATE people SET [PHONE]=@v WHERE rowNumber=@n');
+      let changed = 0;
+      const tx = db.transaction((list)=>{
+        for (const r of list){ const n = norm(r.p); if (n && n !== String(r.p)) { upd.run({ v: n, n: r.rowNumber }); changed++; } }
+      });
+      tx(rows);
+      console.log(`[boot] Phone normalization updated: ${changed}`);
+    } catch (e) { console.warn('[boot] Phone normalization failed:', e?.message || e) }
+  };
   backfillLawyerName();
   fillNamesFromAppendByPhone();
+  normalizePhones();
 } catch {}
 
 // Seed localities from existing people if localities table is empty
@@ -153,6 +182,7 @@ try {
         // Run name backfills again in case newly appended rows have alternate headers
         try { backfillLawyerName(); } catch {}
         try { fillNamesFromAppendByPhone(); } catch {}
+        try { normalizePhones(); } catch {}
         try { fs.writeFileSync(marker, JSON.stringify({ digest: shouldRun.digest, at: new Date().toISOString(), result: { totalAfter: res?.totalAfter, patched: res?.patched } })) } catch {}
       }
     } catch (e) {
@@ -163,6 +193,7 @@ try {
     // Even if no append, ensure any residual empty LAWYERNAME is backfilled
     try { backfillLawyerName(); } catch {}
     try { fillNamesFromAppendByPhone(); } catch {}
+    try { normalizePhones(); } catch {}
   }
 } catch (e) { console.warn('[boot] Append check failed:', e?.message || e) }
 
