@@ -1,0 +1,22 @@
+{
+  "dir": "C:\\Users\\Bilaal\\Desktop\\Coding Projects\\Spreadsheet simplified\\append",
+  "files": [
+    "Chunian HC plus LC final.xlsx",
+    "Ferozewala HC plus LC final.xlsx",
+    "Kasur LC plus HC final.xlsx",
+    "Kot Radha Kishan LC plus HC final.xlsx",
+    "Nankana Sahib Hc plus lc final.xlsx",
+    "Pattoki HC plus LC Final.xlsx",
+    "Sangla Hill HC plus LC final.xlsx",
+    "Shah Kot HC plus LC final.xlsx",
+    "Sheikhupura HC plus LC final.xlsx"
+  ],
+  "scannedRows": 10953,
+  "uniqueNewNames": 273,
+  "totalBefore": 35331,
+  "expectedAfter": 35604,
+  "apply": true,
+  "patchCandidates": 10414,
+  "totalAfter": 35604,
+  "patched": 10401
+}

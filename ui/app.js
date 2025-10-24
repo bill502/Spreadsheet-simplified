@@ -41,7 +41,7 @@ function renderTable(items) {
   headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; trHead.appendChild(th); });
   thead.appendChild(trHead);
 
-  const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','Name','Full Name','FullName','Alias'];
+  const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
   const phoneKeys = ['Phone','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
   const ucKeys = ['UC','Uc','Union Council','UnionCouncil'];
   const ppKeys = ['PP','Pp'];

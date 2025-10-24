@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "migrate": "node server/migrate.js"
+    "migrate": "node server/migrate.js",
+    "append:plan": "node server/tools/append_from_xlsx.js",
+    "append:apply": "node server/tools/append_from_xlsx.js --apply"
   },
   "dependencies": {
     "better-sqlite3": "^9.5.0",
@@ -18,7 +20,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.1.5",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

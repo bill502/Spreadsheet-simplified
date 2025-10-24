@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 import db, { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 dotenv.config();
 initDb();
@@ -56,6 +58,43 @@ try {
     console.log(`[db] Seeded localities from people: ${rows.length}`);
   }
 } catch (e) { console.warn('[db] Localities seed check failed:', e?.message || e) }
+
+// Auto-append from ./append on boot (idempotent with marker)
+try {
+  const dir = './append';
+  const marker = '/data/.append_done.json';
+  const shouldRun = (() => {
+    if (!fs.existsSync(dir)) return false;
+    const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx')).sort();
+    if (files.length === 0) return false;
+    const h = crypto.createHash('sha256');
+    for (const f of files) {
+      const p = require('node:path').join(dir, f);
+      try { const st = fs.statSync(p); h.update(f + ':' + st.size + ':' + st.mtimeMs); } catch {}
+    }
+    const digest = h.digest('hex');
+    let prev = '';
+    try { prev = JSON.parse(fs.readFileSync(marker, 'utf8')).digest || '' } catch {}
+    if (prev === digest) return false;
+    return { digest, files };
+  })();
+  if (shouldRun && typeof shouldRun === 'object') {
+    console.log('[boot] Append detected; running append_from_xlsx for', shouldRun.files.length, 'file(s)');
+    try {
+      const mod = await import('./tools/append_from_xlsx.js');
+      const fn = mod.default || mod.runAppend;
+      if (typeof fn === 'function') {
+        const res = await fn({ dir: './append', apply: true, patch: true, overwrite: true });
+        console.log('[boot] Append result:', JSON.stringify(res));
+        try { fs.writeFileSync(marker, JSON.stringify({ digest: shouldRun.digest, at: new Date().toISOString(), result: { totalAfter: res?.totalAfter, patched: res?.patched } })) } catch {}
+      }
+    } catch (e) {
+      console.warn('[boot] Append run failed:', e?.message || e);
+    }
+  } else {
+    console.log('[boot] No append action needed');
+  }
+} catch (e) { console.warn('[boot] Append check failed:', e?.message || e) }
 
 // XLSX/Rebuild workflow removed — data edits happen via the web UI only.
 
