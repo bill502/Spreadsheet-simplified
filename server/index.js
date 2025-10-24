@@ -26,6 +26,17 @@ try {
   try { db.exec("UPDATE people SET Called = CAST(Called AS INTEGER) WHERE Called IS NOT NULL AND TRIM(Called)<>''"); } catch {}
   try { db.exec("UPDATE people SET Visited = CAST(Visited AS INTEGER) WHERE Visited IS NOT NULL AND TRIM(Visited)<>''"); } catch {}
   try { db.exec("UPDATE people SET ConfirmedVoter = CAST(ConfirmedVoter AS INTEGER) WHERE ConfirmedVoter IS NOT NULL AND TRIM(ConfirmedVoter)<>''"); } catch {}
+  // Backfill LAWYERNAME from common alternate headers if empty (idempotent)
+  try {
+    const cols = db.prepare('PRAGMA table_info(people)').all().map(r => String(r.name));
+    const has = (n) => cols.includes(n);
+    const tryFill = (col) => {
+      if (!has(col)) return;
+      const safe = col.replace(']', ']]');
+      db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [${safe}] IS NOT NULL AND TRIM([${safe}])<>''`);
+    };
+    ['Name','Full Name','FullName','Alias','LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES'].forEach(tryFill);
+  } catch {}
 } catch {}
 
 // Seed localities from existing people if localities table is empty
