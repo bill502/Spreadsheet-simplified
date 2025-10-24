@@ -513,6 +513,56 @@ router.post('/admin/repair-names-phones', requireRole('admin'), async (req, res)
     return res.status(500).json({ error: e?.message || String(e) });
   }
 });
+
+// Admin-only: deduplicate rows by (name, phone) or (phone) keeping earliest rowNumber
+router.post('/admin/cleanup-dedupe', requireRole('admin'), async (req, res) => {
+  try {
+    const backup = () => {
+      try {
+        const src = process.env.DATABASE_URL || '/data/app.db';
+        const dst = `/data/app.db.pre_cleanup.${Date.now()}.bak`;
+        require('node:fs').copyFileSync(src, dst);
+        return dst;
+      } catch { return null }
+    };
+    const b = backup();
+    const digits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g,'') };
+    const normPhone = (raw) => {
+      const d = digits(raw);
+      if (!d) return '';
+      if (d.startsWith('00923') && d.length >= 13) return '0' + d.slice(4, 14);
+      if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
+      if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
+      if (d.startsWith('3') && d.length === 10) return '0' + d;
+      return d;
+    };
+    const nameOf = (row) => {
+      const keys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
+      for (const k of keys){ const v = row?.[k]; if (v!=null && String(v).trim()!=='') return String(v).trim().toLowerCase(); }
+      return '';
+    };
+    const rows = db.prepare('SELECT * FROM people ORDER BY rowNumber').all();
+    const keep = new Map();
+    const dupes = [];
+    for (const r of rows){
+      const n = nameOf(r);
+      const p = normPhone(r.PHONE ?? r.Phone ?? r['Phone'] ?? r['Phone Number'] ?? r.Mobile ?? r['Mobile Number'] ?? r.Contact ?? '');
+      const key = (p ? (n ? `n:${n}|p:${p}` : `p:${p}`) : (n ? `n:${n}` : `row:${r.rowNumber}`));
+      if (!keep.has(key)) keep.set(key, r.rowNumber); else dupes.push(r.rowNumber);
+    }
+    let deleted = 0;
+    if (dupes.length){
+      const tx = db.transaction((list)=>{
+        const del = db.prepare('DELETE FROM people WHERE rowNumber = ?');
+        for (const rn of list){ del.run(rn); deleted++; }
+      });
+      tx(dupes);
+    }
+    return res.json({ ok: true, backup: b, duplicatesDeleted: deleted, checked: rows.length });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || String(e) });
+  }
+});
 // Debug XLSX info (admin or debug token)
 // XLSX debug removed — spreadsheet imports are no longer supported.
 

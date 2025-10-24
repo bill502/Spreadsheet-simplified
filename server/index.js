@@ -152,11 +152,12 @@ try {
   }
 } catch (e) { console.warn('[db] Localities seed check failed:', e?.message || e) }
 
-// Auto-append from ./append on boot (idempotent with marker)
+// Auto-append from ./append on boot (idempotent with marker) — gated by env
 try {
   const dir = './append';
   const marker = '/data/.append_done.json';
   const shouldRun = (() => {
+    if (process.env.APPEND_ON_BOOT !== 'true') return false;
     if (!fs.existsSync(dir)) return false;
     const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx')).sort();
     if (files.length === 0) return false;
