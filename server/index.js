@@ -29,15 +29,29 @@ try {
   // Define helper for name backfill so we can run it after append too
   const backfillLawyerName = () => {
     try {
-      const cols = db.prepare('PRAGMA table_info(people)').all().map(r => String(r.name));
+      const info = db.prepare('PRAGMA table_info(people)').all();
+      const cols = info.map(r => String(r.name));
       const has = (n) => cols.includes(n);
-      const tryFill = (col) => {
-        if (!has(col)) return;
+      const preferred = ['LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
+      const dynamic = cols.filter(c => {
+        const lc = String(c).toLowerCase();
+        if (lc === 'lawyername' || lc === 'rownumber' || lc === 'localityname') return false;
+        return lc.includes('name');
+      });
+      const order = Array.from(new Set([...preferred, ...dynamic]));
+      for (const col of order) {
+        if (!has(col)) continue;
         const safe = col.replace(']', ']]');
-        db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [${safe}] IS NOT NULL AND TRIM([${safe}])<>''`);
-      };
-      ['Name','Full Name','FullName','Alias','LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES'].forEach(tryFill);
-    } catch {}
+        db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] 
+          WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') 
+            AND [${safe}] IS NOT NULL 
+            AND TRIM([${safe}])<>''`);
+      }
+      try {
+        const left = db.prepare("SELECT COUNT(*) AS c FROM people WHERE [LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='' ").get().c;
+        console.log(`[boot] LAWYERNAME backfill remaining empty: ${left}`);
+      } catch {}
+    } catch (e) { console.warn('[boot] LAWYERNAME backfill failed:', e?.message || e) }
   };
   backfillLawyerName();
 } catch {}
