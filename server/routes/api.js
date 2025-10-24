@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
 import db, { getColumns } from '../db.js';
-import XLSX from 'xlsx';
 // No path/url imports needed; XLSX flow removed
 
 const router = express.Router();
@@ -481,36 +480,8 @@ router.post('/admin/repair-names-phones', requireRole('admin'), async (req, res)
       }
     });
     tx(rows);
-    // Phone-based name from append
-    let fixedByPhone = 0;
-    try {
-      const dir = './append';
-      const files = require('node:fs').readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx'));
-      if (files && files.length){
-        const byPhone = new Map();
-        const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
-        const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
-        for (const f of files){
-          const wb = XLSX.readFile(require('node:path').join(dir,f));
-          const ws = wb.Sheets[ wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0] ];
-          const items = XLSX.utils.sheet_to_json(ws, { defval: '' });
-          for (const it of items){
-            const nm = nameKeys.map(k => it[k]).find(v => v!=null && String(v).trim()!=='');
-            const ph = phoneKeys.map(k => it[k]).find(v => v!=null && String(v).trim()!=='');
-            const pd = normPhone(ph||'');
-            if (nm && pd && !byPhone.has(pd)) byPhone.set(pd, String(nm).trim());
-          }
-        }
-        const cand = db.prepare("SELECT rowNumber, [PHONE] AS ph FROM people WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [PHONE] IS NOT NULL AND TRIM([PHONE])<>''").all();
-        const u = db.prepare('UPDATE people SET [LAWYERNAME]=@v WHERE rowNumber=@n');
-        const tx2 = db.transaction((list)=>{
-          for (const r of list){ const pd = normPhone(r.ph); const nm = byPhone.get(pd); if (nm){ u.run({ v: nm, n: r.rowNumber }); fixedByPhone++; } }
-        });
-        tx2(cand);
-      }
-    } catch {}
     const remain = db.prepare("SELECT COUNT(*) AS c FROM people WHERE [LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])=''").get().c;
-    return res.json({ ok: true, phonesNormalized: changed, namesFixedByPhone: fixedByPhone, remainingUnknown: remain });
+    return res.json({ ok: true, phonesNormalized: changed, remainingUnknown: remain });
   } catch (e) {
     return res.status(500).json({ error: e?.message || String(e) });
   }

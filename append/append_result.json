@@ -13,10 +13,10 @@
   ],
   "scannedRows": 10953,
   "uniqueNewNames": 273,
-  "totalBefore": 35331,
-  "expectedAfter": 35604,
+  "totalBefore": 71094,
+  "expectedAfter": 71367,
   "apply": true,
   "patchCandidates": 10414,
-  "totalAfter": 35604,
+  "totalAfter": 71367,
   "patched": 10401
 }

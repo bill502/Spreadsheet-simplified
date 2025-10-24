@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 import db, { initDb, runMigrations } from './db.js';
 import api from './routes/api.js';
 import crypto from 'node:crypto';
-import XLSX from 'xlsx';
 
 dotenv.config();
 initDb();
@@ -27,100 +26,7 @@ try {
   try { db.exec("UPDATE people SET Called = CAST(Called AS INTEGER) WHERE Called IS NOT NULL AND TRIM(Called)<>''"); } catch {}
   try { db.exec("UPDATE people SET Visited = CAST(Visited AS INTEGER) WHERE Visited IS NOT NULL AND TRIM(Visited)<>''"); } catch {}
   try { db.exec("UPDATE people SET ConfirmedVoter = CAST(ConfirmedVoter AS INTEGER) WHERE ConfirmedVoter IS NOT NULL AND TRIM(ConfirmedVoter)<>''"); } catch {}
-  // Define helper for name backfill so we can run it after append too
-  const backfillLawyerName = () => {
-    try {
-      const info = db.prepare('PRAGMA table_info(people)').all();
-      const cols = info.map(r => String(r.name));
-      const has = (n) => cols.includes(n);
-      const preferred = ['LAWYER NAME','Lawyer Name','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
-      const dynamic = cols.filter(c => {
-        const lc = String(c).toLowerCase();
-        if (lc === 'lawyername' || lc === 'rownumber' || lc === 'localityname') return false;
-        return lc.includes('name');
-      });
-      const order = Array.from(new Set([...preferred, ...dynamic]));
-      for (const col of order) {
-        if (!has(col)) continue;
-        const safe = col.replace(']', ']]');
-        db.exec(`UPDATE people SET [LAWYERNAME] = [${safe}] 
-          WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') 
-            AND [${safe}] IS NOT NULL 
-            AND TRIM([${safe}])<>''`);
-      }
-      try {
-        const left = db.prepare("SELECT COUNT(*) AS c FROM people WHERE [LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='' ").get().c;
-        console.log(`[boot] LAWYERNAME backfill remaining empty: ${left}`);
-      } catch {}
-    } catch (e) { console.warn('[boot] LAWYERNAME backfill failed:', e?.message || e) }
-  };
-  const fillNamesFromAppendByPhone = () => {
-    try {
-      const dir = './append';
-      if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx'));
-      if (!files.length) return;
-      const getDigits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g, '') };
-      const pick = (obj, keys) => { for (const k of keys){ const v = obj?.[k]; if (v!=null && String(v).trim()!=='') return String(v).trim() } return '' };
-      const nameKeys = ['LAWYERNAME','LawyerName','Lawyer Name','LAWYER NAME','Lawyer Names','LAWYER NAMES','Name','Full Name','FullName','Alias'];
-      const phoneKeys = ['PHONE','Phone','Phone Number','Mobile','Mobile Number','Contact','Cell'];
-      const byPhone = new Map();
-      for (const f of files){
-        try {
-          const wb = XLSX.readFile(path.join(dir,f));
-          const ws = wb.Sheets[ wb.SheetNames.includes('merged') ? 'merged' : wb.SheetNames[0] ];
-          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-          for (const r of rows){
-            const nm = pick(r, nameKeys);
-            const ph = pick(r, phoneKeys);
-            const pd = getDigits(ph);
-            if (nm && pd) { if (!byPhone.has(pd)) byPhone.set(pd, nm) }
-          }
-        } catch {}
-      }
-      if (byPhone.size === 0) return;
-      const candidates = db.prepare("SELECT rowNumber, [PHONE] AS ph FROM people WHERE ([LAWYERNAME] IS NULL OR TRIM([LAWYERNAME])='') AND [PHONE] IS NOT NULL AND TRIM([PHONE])<>''").all();
-      const upd = db.prepare('UPDATE people SET [LAWYERNAME]=@v WHERE rowNumber=@n');
-      let fixed = 0;
-      const tx = db.transaction((list)=>{
-        for (const r of list){ const pd = getDigits(r.ph); const nm = byPhone.get(pd); if (nm){ upd.run({ v: nm, n: r.rowNumber }); fixed++; } }
-      });
-      tx(candidates);
-      console.log(`[boot] Phone-based name backfill applied: ${fixed}`);
-    } catch (e) { console.warn('[boot] Phone-based backfill failed:', e?.message || e) }
-  };
-  const normalizePhones = () => {
-    try {
-      const digits = (v) => { if (v==null) return ''; return String(v).replace(/\D+/g,'') };
-      const norm = (raw) => {
-        const d = digits(raw);
-        if (!d) return '';
-        // Pakistan mobile normalization
-        if (d.startsWith('00923') && d.length >= 13) return '0' + d.slice(4, 14);
-        if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
-        if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
-        if (d.startsWith('3') && d.length === 10) return '0' + d;
-        if (d.startsWith('3') && d.length === 11) return '0' + d.slice(0, 10);
-        // Fallback to first 11 if it looks like mobile
-        if (d.length > 11 && d.includes('3')) {
-          const i = d.indexOf('3');
-          if (i >= 0 && i + 11 <= d.length) return ('0' + d.slice(i, i+10)).slice(0,11);
-        }
-        return d;
-      };
-      const rows = db.prepare('SELECT rowNumber, [PHONE] AS p FROM people WHERE [PHONE] IS NOT NULL AND TRIM([PHONE])<>""').all();
-      const upd = db.prepare('UPDATE people SET [PHONE]=@v WHERE rowNumber=@n');
-      let changed = 0;
-      const tx = db.transaction((list)=>{
-        for (const r of list){ const n = norm(r.p); if (n && n !== String(r.p)) { upd.run({ v: n, n: r.rowNumber }); changed++; } }
-      });
-      tx(rows);
-      console.log(`[boot] Phone normalization updated: ${changed}`);
-    } catch (e) { console.warn('[boot] Phone normalization failed:', e?.message || e) }
-  };
-  backfillLawyerName();
-  fillNamesFromAppendByPhone();
-  normalizePhones();
+  // No backfills on boot; keep runtime simple. Use admin endpoints for maintenance.
 } catch {}
 
 // Seed localities from existing people if localities table is empty
@@ -153,51 +59,7 @@ try {
   }
 } catch (e) { console.warn('[db] Localities seed check failed:', e?.message || e) }
 
-// Auto-append from ./append on boot (idempotent with marker) — gated by env
-try {
-  const dir = './append';
-  const marker = '/data/.append_done.json';
-  const shouldRun = (() => {
-    if (process.env.APPEND_ON_BOOT !== 'true') return false;
-    if (!fs.existsSync(dir)) return false;
-    const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.xlsx')).sort();
-    if (files.length === 0) return false;
-    const h = crypto.createHash('sha256');
-    for (const f of files) {
-      const p = path.join(dir, f);
-      try { const st = fs.statSync(p); h.update(f + ':' + st.size + ':' + st.mtimeMs); } catch {}
-    }
-    const digest = h.digest('hex');
-    let prev = '';
-    try { prev = JSON.parse(fs.readFileSync(marker, 'utf8')).digest || '' } catch {}
-    if (prev === digest) return false;
-    return { digest, files };
-  })();
-  if (shouldRun && typeof shouldRun === 'object') {
-    console.log('[boot] Append detected; running append_from_xlsx for', shouldRun.files.length, 'file(s)');
-    try {
-      const mod = await import('./tools/append_from_xlsx.js');
-      const fn = mod.default || mod.runAppend;
-      if (typeof fn === 'function') {
-        const res = await fn({ dir: './append', apply: true, patch: true, overwrite: true });
-        console.log('[boot] Append result:', JSON.stringify(res));
-        // Run name backfills again in case newly appended rows have alternate headers
-        try { backfillLawyerName(); } catch {}
-        try { fillNamesFromAppendByPhone(); } catch {}
-        try { normalizePhones(); } catch {}
-        try { fs.writeFileSync(marker, JSON.stringify({ digest: shouldRun.digest, at: new Date().toISOString(), result: { totalAfter: res?.totalAfter, patched: res?.patched } })) } catch {}
-      }
-    } catch (e) {
-      console.warn('[boot] Append run failed:', e?.message || e);
-    }
-  } else {
-    console.log('[boot] No append action needed');
-    // Even if no append, ensure any residual empty LAWYERNAME is backfilled
-    try { backfillLawyerName(); } catch {}
-    try { fillNamesFromAppendByPhone(); } catch {}
-    try { normalizePhones(); } catch {}
-  }
-} catch (e) { console.warn('[boot] Append check failed:', e?.message || e) }
+// Append workflow removed from boot; use admin endpoints to maintain data.
 
 // XLSX/Rebuild workflow removed — data edits happen via the web UI only.
 
