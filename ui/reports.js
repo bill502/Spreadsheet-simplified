@@ -37,10 +37,12 @@ function render(items){
   const ppKeys = ['PP','Pp'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];
   const addrKeys = ['ADDRESS','Address','HighlightedAddress'];
-  // Columns: remove Called/Visited booleans and ConfirmedVoter; keep dates
-  const shown=['Name','Phone','UC/PP','Locality','Address','Call Date','Visit Date','Comments'];
-  // Widths sum to 100%; favor long-text (Address), slightly increase Phone; combine UC/PP
-  const widths=['15%','10%','9%','10%','23%','8%','8%','17%'];
+  // Columns: remove Called/Visited booleans and ConfirmedVoter; keep dates.
+  // Always omit Comments as a column; render comments as a sub-row when present.
+  const shown = ['Name','Phone','UC/PP','Locality','Address','Call','Visit'];
+  // Widths sum to 100%; boost long text columns.
+  // Make Call/Visit wide enough to keep dates on one line
+  const widths = ['20%','12%','8%','10%','30%','10%','10%'];
   if (colg) widths.forEach(w=>{ const c=document.createElement('col'); c.style.width=w; colg.appendChild(c) });
   shown.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th) });
   // Optional grouping
@@ -67,32 +69,37 @@ function render(items){
     const ucVal = getFirst(row, ['UC','Uc','Union Council','UnionCouncil']);
     const ppVal = getFirst(row, ['PP','Pp']);
     const ucpp = (ucVal || ppVal) ? `${ucVal||''}\n${ppVal||''}` : '';
-    const cells=[
+    const cellVals = [
       getFirst(row, nameKeys) || 'Unknown',
       getFirst(row, phoneKeys),
       ucpp,
       getFirst(row, locKeys),
       getFirst(row, addrKeys),
       callDate || '',
-      visitDate || '',
-      (row.Comments || '')
+      visitDate || ''
     ];
-    cells.forEach((t,i)=>{ const td=document.createElement('td'); td.textContent=t||''; if(i===2||i===7) td.style.whiteSpace='pre-wrap'; tr.appendChild(td) });
-    tbody.appendChild(tr)
+    cellVals.forEach((t,i)=>{
+      const td=document.createElement('td'); td.textContent=t||'';
+      if(i===2) td.style.whiteSpace='pre-wrap'; // UC/PP can wrap
+      if(i===5 || i===6) td.style.whiteSpace='nowrap'; // dates stay on one line
+      tr.appendChild(td)
+    });
+    tbody.appendChild(tr);
+    // Optional comment sub-row
+    const cmt = (row.Comments && String(row.Comments).trim()!=='') ? String(row.Comments) : '';
+    if (cmt){
+      const ctr = document.createElement('tr');
+      const ctd = document.createElement('td'); ctd.colSpan = shown.length; ctd.textContent = cmt; ctd.style.whiteSpace='pre-wrap'; ctd.style.fontSize='12px'; ctd.style.color='var(--sub)'; ctd.style.paddingTop='4px';
+      ctr.appendChild(ctd); tbody.appendChild(ctr);
+    }
   };
 
   if (groupBySel === 'none') {
     items.forEach(renderRow);
   } else {
-    // Order groups by natural order of key
+    // Sort by grouping key; no section headers printed
     const orderedKeys = Array.from(groups.keys()).sort((a,b)=> String(a).localeCompare(String(b), undefined, { numeric:true }));
-    const colspan = shown.length;
-    orderedKeys.forEach(key => {
-      const headerTr = document.createElement('tr');
-      const headerTd = document.createElement('td'); headerTd.colSpan = colspan; headerTd.textContent = `${key} — ${groups.get(key).length} item(s)`; headerTd.className = 'muted'; headerTd.style.fontWeight='600'; headerTd.style.padding = '6px 10px';
-      headerTr.appendChild(headerTd); tbody.appendChild(headerTr);
-      groups.get(key).forEach(renderRow);
-    });
+    orderedKeys.forEach(key => { groups.get(key).forEach(renderRow); });
   }
   el('resultsPanel').style.display = items.length? 'block':'none';
   const meta=el('meta'); if(meta) meta.textContent = `Showing ${items.length} row(s)`
