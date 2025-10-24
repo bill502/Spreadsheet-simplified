@@ -100,6 +100,7 @@ try {
         if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
         if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
         if (d.startsWith('3') && d.length === 10) return '0' + d;
+        if (d.startsWith('3') && d.length === 11) return '0' + d.slice(0, 10);
         // Fallback to first 11 if it looks like mobile
         if (d.length > 11 && d.includes('3')) {
           const i = d.indexOf('3');

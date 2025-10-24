@@ -83,6 +83,7 @@ function formatOutRow(row){
       if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
       if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
       if (d.startsWith('3') && d.length === 10) return '0' + d;
+      if (d.startsWith('3') && d.length === 11) return '0' + d.slice(0, 10);
       return d;
     };
     const phones = [r.PHONE, r.Phone, r['Phone Number'], r.Mobile, r['Mobile Number'], r.Contact, r.Cell].filter(v => v!=null);
@@ -451,6 +452,7 @@ router.post('/admin/repair-names-phones', requireRole('admin'), async (req, res)
       if (d.startsWith('923') && d.length >= 12) return '0' + d.slice(2, 12);
       if (d.startsWith('03') && d.length >= 11) return d.slice(0, 11);
       if (d.startsWith('3') && d.length === 10) return '0' + d;
+      if (d.startsWith('3') && d.length === 11) return '0' + d.slice(0, 10);
       return d;
     };
     // Backfill names from name-like columns
