@@ -40,11 +40,12 @@ function render(items){
   // Columns: remove Called/Visited booleans and ConfirmedVoter; keep dates.
   // Always omit Comments as a column; render comments as a sub-row when present.
   const shown = ['Name','Phone','UC/PP','Locality','Address','Call','Visit'];
-  // Widths sum to 100%; boost long text columns.
-  // Make Call/Visit wide enough to keep dates on one line
-  const widths = ['20%','12%','8%','10%','30%','10%','10%'];
+  // Widths sum to 100%; shrink dates (MM-DD) and expand phone for no-break display
+  const widths = ['20%','15%','8%','10%','30%','8%','9%'];
   if (colg) widths.forEach(w=>{ const c=document.createElement('col'); c.style.width=w; colg.appendChild(c) });
   shown.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th) });
+  // Update title with count
+  const title = el('resultsTitle'); if (title) title.textContent = `Results (${items.length})`;
   // Optional grouping
   const groupBySel = (el('fGroupBy')?.value || 'none').toLowerCase();
   const groupKey = (row) => {
@@ -62,10 +63,18 @@ function render(items){
     });
   }
 
+  const toMD = (s) => {
+    if (!s) return '';
+    const t = String(s);
+    const m = t.match(/\d{4}-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}`;
+    if (t.includes('-') && t.length >= 5) return t.slice(-5);
+    return t;
+  };
   const renderRow = (row) => {
     const tr=document.createElement('tr');
-    const callDate = getFirst(row, ['CallDate','CALLDATE','Call Date','CALL DATE']);
-    const visitDate = getFirst(row, ['VisitDate','VISITDATE','Visit Date','VISIT DATE']);
+    const callDate = toMD(getFirst(row, ['CallDate','CALLDATE','Call Date','CALL DATE']));
+    const visitDate = toMD(getFirst(row, ['VisitDate','VISITDATE','Visit Date','VISIT DATE']));
     const ucVal = getFirst(row, ['UC','Uc','Union Council','UnionCouncil']);
     const ppVal = getFirst(row, ['PP','Pp']);
     const ucpp = (ucVal || ppVal) ? `${ucVal||''}\n${ppVal||''}` : '';
@@ -81,7 +90,7 @@ function render(items){
     cellVals.forEach((t,i)=>{
       const td=document.createElement('td'); td.textContent=t||'';
       if(i===2) td.style.whiteSpace='pre-wrap'; // UC/PP can wrap
-      if(i===5 || i===6) td.style.whiteSpace='nowrap'; // dates stay on one line
+      if(i===1 || i===5 || i===6) td.style.whiteSpace='nowrap'; // phone and dates stay on one line
       tr.appendChild(td)
     });
     tbody.appendChild(tr);

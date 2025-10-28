@@ -21,13 +21,13 @@
         #resultsPanel { display:block }
         #resultsPanel .content { padding:0 }
         #resultsPanel [style*="max-height"]{ max-height: none !important; overflow: visible !important }
-        table{ page-break-after:auto }
+        table{ page-break-after:auto; page-break-inside:auto; width:100% }
         tr{ page-break-inside:avoid; page-break-after:auto }
         thead{ display: table-header-group }
         tfoot{ display: table-footer-group }
         th,td{ border-bottom:1px solid #ccc; color:black }
         #meta { display: none !important }
-        thead th{ background:#fff !important; color:#000 !important; white-space: nowrap }
+        thead th{ background:#fff !important; color:#000 !important; white-space: nowrap; position: static !important; top: auto !important; z-index: auto !important }
       }
     </style>
   </head>
@@ -112,7 +112,7 @@
 
       <div class="panel" id="resultsPanel" style="display:none">
         <div class="content">
-          <h2>Results</h2>
+          <h2 id="resultsTitle">Results</h2>
           <div class="muted" id="meta"></div>
           <div style="overflow:auto; max-height:60vh">
             <table>
