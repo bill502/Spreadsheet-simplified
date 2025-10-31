@@ -359,7 +359,7 @@ router.post('/admin/revert', requireRole('admin'), (req, res) => {
 // Reports
 router.get('/reports', requireRole('editor'), (req, res) => {
   const q = req.query || {};
-  const limit = Math.max(1, Math.min(1000, parseInt(q.limit || '200', 10)));
+  const limit = Math.max(1, Math.min(50000, parseInt(q.limit || '200', 10)));
   const cols = new Set(getColumns());
   const conds = [];
   const params = {};
@@ -601,4 +601,5 @@ router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
 
 // Admin-only upload/replace XLSX on persistent disk using base64 body
 // XLSX upload removed — spreadsheet uploads are no longer supported.
+
 
