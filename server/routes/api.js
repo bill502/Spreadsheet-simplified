@@ -2,8 +2,8 @@ import express from 'express';
 import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
-import db, { getColumns } from '../db.js';
-// No path/url imports needed; XLSX flow removed
+import { findPollingFor } from '../pollingMap.js';
+// Polling station mapping loaded locally if available
 
 const router = express.Router();
 
@@ -170,7 +170,18 @@ router.get('/search', (req, res) => {
 
 router.get('/row/:id', (req, res) => {
   const n = parseInt(req.params.id, 10);
-  return res.json(formatOutRow(getRowByNumber(n)));
+  const base = formatOutRow(getRowByNumber(n));
+  try {
+    const newId = base['new ID'] ?? base.NewID ?? '';
+    const idVal = base.ID ?? base['Id'] ?? '';
+    const p = findPollingFor(newId, idVal);
+    if (p) {
+      base.PollingLocation = p.location;
+      base.PollingFloor = p.floor;
+      base.PollingStation = p.station;
+    }
+  } catch {}
+  return res.json(base);
 });
 
 router.post('/row', requireRole('editor'), (req, res) => {
@@ -589,3 +600,4 @@ router.delete('/admin/locality/:name', requireRole('admin'), (req, res) => {
 
 // Admin-only upload/replace XLSX on persistent disk using base64 body
 // XLSX upload removed — spreadsheet uploads are no longer supported.
+

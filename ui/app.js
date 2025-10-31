@@ -168,6 +168,15 @@ function renderDetails() {
   addRO('UC', getFirst(d, ucKeys));
   addRO('Locality', getFirst(d, locKeys));
   fields.appendChild(info);
+  // Polling info (read-only if available)
+  if (d.PollingLocation || d.PollingFloor || d.PollingStation) {
+    const poll = document.createElement('div'); poll.className='grid-fields';
+    const addROp = (labelText, val) => { if(!val) return; const w=document.createElement('div'); w.className='field'; const la=document.createElement('label'); la.textContent=labelText; const inp=document.createElement('input'); inp.type='text'; inp.value=val; inp.readOnly=true; inp.disabled=true; w.appendChild(la); w.appendChild(inp); poll.appendChild(w); };
+    addROp('Polling Location', d.PollingLocation||'');
+    addROp('Polling Floor', d.PollingFloor||'');
+    addROp('Polling Station #', d.PollingStation||'');
+    fields.appendChild(poll);
+  }
 
   // Called / Visited toggles with dates and ID badges
   const topRow = document.createElement('div'); topRow.className = 'row'; topRow.style.gap = '12px'; topRow.style.flexWrap = 'wrap';
