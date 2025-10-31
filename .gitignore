@@ -27,3 +27,5 @@ data/**/*.db
 # Temp files
 tmp_*.txt
 tmp_*.ps1
+data/**/*.db-wal
+data/**/*.db-shm
