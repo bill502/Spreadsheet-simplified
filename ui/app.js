@@ -148,7 +148,6 @@ function renderDetails() {
   const phoneKeys = ['Phone','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
   const locKeys = ['Locality','LocalityName','Location','Area','Mohalla','Village','Ward'];
   const addrKeys = ['ADDRESS','Address','HighlightedAddress'];
-  const statusKeys = ['Status'];
   const ppKeys = ['PP','Pp'];
   const ucKeys = ['UC','Uc','Union Council','UnionCouncil'];
 
@@ -163,15 +162,32 @@ function renderDetails() {
   addRO('Name', getFirst(d, nameKeys) || 'Unknown');
   addRO('Phone', getFirst(d, phoneKeys));
   addRO('Address', getFirst(d, addrKeys));
-  addRO('Status', getFirst(d, statusKeys));
   addRO('PP', getFirst(d, ppKeys));
   addRO('UC', getFirst(d, ucKeys));
   addRO('Locality', getFirst(d, locKeys));
   fields.appendChild(info);
   // Polling info (read-only if available)
   if (d.PollingLocation || d.PollingFloor || d.PollingStation) {
-    const poll = document.createElement('div'); poll.className='grid-fields';
-    const addROp = (labelText, val) => { if(!val) return; const w=document.createElement('div'); w.className='field'; const la=document.createElement('label'); la.textContent=labelText; const inp=document.createElement('input'); inp.type='text'; inp.value=val; inp.readOnly=true; inp.disabled=true; w.appendChild(la); w.appendChild(inp); poll.appendChild(w); };
+    const poll = document.createElement('div'); poll.className='grid-fields'; poll.style.gridTemplateColumns='1fr'; poll.style.gap='8px';
+    const addROp = (labelText, val) => {
+      if(!val) return;
+      const w = document.createElement('div'); w.className = 'field';
+      const la = document.createElement('label'); la.textContent = labelText;
+      let node;
+      if (labelText === 'Polling Location') {
+        node = document.createElement('textarea');
+        node.readOnly = true; node.disabled = true;
+        node.rows = Math.min(4, Math.max(2, Math.ceil(String(val).length / 40)));
+        node.style.width = '100%';
+        node.style.resize = 'vertical';
+        node.value = val;
+      } else {
+        node = document.createElement('input'); node.type = 'text';
+        node.value = val; node.readOnly = true; node.disabled = true;
+        node.style.width = '100%';
+      }
+      w.appendChild(la); w.appendChild(node); poll.appendChild(w);
+    };
     addROp('Polling Location', d.PollingLocation||'');
     addROp('Polling Floor', d.PollingFloor||'');
     addROp('Polling Station #', d.PollingStation||'');
@@ -314,7 +330,7 @@ async function createEntry() {
 }
 
 function bind() {
-  el('btnSearch').addEventListener('click', () => doSearch().catch(alert));
+  el('btnSearch').addEventListener('click', () => doSearch().catch(e => toast(e.message)));
   const debounced = debounce(() => doSearch().catch(e => toast(e.message)), 400);
   el('query').addEventListener('input', debounced);
   el('btnSave').addEventListener('click', () => saveChanges().catch(e => toast(e.message)));
@@ -375,6 +391,8 @@ function renderAuth(){
   const linkRep = el('linkReports'); if (linkRep) linkRep.style.display = (state.role === 'editor' || state.role === 'admin') ? '' : 'none';
   const loginPanel = el('loginPanel'); if (loginPanel) loginPanel.style.display = state.user ? 'none' : loginPanel.style.display;
 }
+
+
 
 
 
