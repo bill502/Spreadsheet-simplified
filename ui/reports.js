@@ -120,6 +120,22 @@ function bind(){
   el('btnLogout')?.addEventListener('click', async ()=>{ try{ await api('/api/logout',{method:'POST'}); location.href='index.html' }catch(e){ toast(e.message) } });
   el('btnRun')?.addEventListener('click', ()=> runReport().catch(e=>toast(e.message)));
   el('btnPrint')?.addEventListener('click', ()=>{ if(state.items.length===0){ if(!confirm('No results. Print anyway?')) return } window.print() });
+  el('btnExportCsv')?.addEventListener('click', ()=>{
+    try {
+      if (!state.items || state.items.length === 0) { toast('No results to export'); return }
+      const nameKeys = ['Name','LAWYERNAME','LAWYERNAME','Lawyer Name','Lawyer Name','Lawyer Names','Lawyer Names','Full Name','FullName','Alias'];
+      const phoneKeys = ['PHONE','PHONE','Phone Number','Mobile','Mobile Number','Contact','Cell'];
+      const get = (row, keys)=>{ for(const k of keys){ const v=row?.[k]; if(v!=null && String(v).trim()!=='') return String(v).trim() } return '' }
+      const rows = state.items.map(r=> [get(r,nameKeys), get(r,phoneKeys)]);
+      const csvEsc = (s)=>{ const t=String(s??''); return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t };
+      const lines = [['Name','PHONE'], ...rows].map(cols => cols.map(csvEsc).join(',')).join('\n');
+      const blob = new Blob([lines], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a'); const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,16);
+      const confirmed = (document.getElementById('fConfirmed')?.checked === true);
+      a.download = confirmed ? `confirmed-voters-${ts}.csv` : `report-${ts}.csv`;
+      a.href = URL.createObjectURL(blob); a.style.display='none'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove() }, 0);
+    } catch(e){ toast(e.message) }
+  });
   el('btnToggleAdvanced')?.addEventListener('click', ()=>{ const p=el('advancedPanel'); if(!p) return; const show = (p.style.display==='none'||p.style.display===''); p.style.display = show? 'block':'none' });
   // Quick actions
   el('btnQuickToday')?.addEventListener('click', ()=>{
@@ -146,3 +162,6 @@ function bind(){
     await runReport();
   } catch(e){ toast(`Init failed: ${e.message}`) }
 })();
+
+
+
