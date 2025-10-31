@@ -28,6 +28,9 @@ function getFirst(row, keys) {
   return '';
 }
 
+// Common fallback keys for legacy ID fields (excluding 'new ID')
+const ID_KEYS = ['ID','Id','ID#','Id#','LegacyID','Legacy Id','Ref','RefID','Reference'];
+
 function renderTable(items) {
   const thead = el('thead');
   const tbody = el('tbody');
@@ -36,7 +39,7 @@ function renderTable(items) {
   if (!items || items.length === 0) return;
 
   // Only show: Name, Phone, PP, UC, Locality, Address (order updated)
-  const headers = ['Name','Phone','PP','UC','Locality','Address'];
+  const headers = ['ID','Name','Phone','PP','UC','Locality','Address'];
   const trHead = document.createElement('tr');
   headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; trHead.appendChild(th); });
   thead.appendChild(trHead);
@@ -52,6 +55,7 @@ function renderTable(items) {
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.addEventListener('click', () => selectRow(row.rowNumber));
+    const idVal = getFirst(row, ID_KEYS);
     const phoneText = getFirst(row, phoneKeys);
     const toTel = (s) => {
       if (!s) return '';
@@ -72,6 +76,7 @@ function renderTable(items) {
       return a;
     })();
     const cells = [
+      idVal,
       getFirst(row, nameKeys) || 'Unknown',
       phoneNode || (phoneText || ''),
       getFirst(row, ppKeys),
@@ -154,6 +159,7 @@ function renderDetails() {
     const input = document.createElement('input'); input.type = 'text'; input.value = val || ''; input.readOnly = true; input.disabled = true;
     wrap.appendChild(label); wrap.appendChild(input); info.appendChild(wrap);
   };
+  addRO('ID', getFirst(d, ID_KEYS));
   addRO('Name', getFirst(d, nameKeys) || 'Unknown');
   addRO('Phone', getFirst(d, phoneKeys));
   addRO('Address', getFirst(d, addrKeys));
@@ -172,7 +178,7 @@ function renderDetails() {
   const voterWrap = document.createElement('label'); const cbVoter = document.createElement('input'); cbVoter.type = 'checkbox'; cbVoter.checked = isTrueish(d.ConfirmedVoter); cbVoter.disabled = !canEdit; voterWrap.append(' Confirmed Voter ', cbVoter);
   const forumInput = document.createElement('input'); forumInput.type = 'text'; forumInput.placeholder = 'Lawyer Forum'; forumInput.value = d.LawyerForum ?? '';
   forumInput.style.minWidth = '160px'; forumInput.dataset.key = 'LawyerForum'; forumInput.readOnly = !canEdit; forumInput.disabled = !canEdit;
-  const idBadge = document.createElement('span'); idBadge.className = 'muted'; idBadge.textContent = `ID: ${d.ID ?? ''}  |  New ID: ${d['new ID'] ?? ''}`;
+  const idBadge = document.createElement('span'); idBadge.className = 'muted'; const idText = getFirst(d, ID_KEYS); idBadge.textContent = 'ID: ' + idText + '  |  New ID: ' + (d['new ID'] ?? '');
   topRow.append(calledWrap, calledDate, visitedWrap, visitedDate, voterWrap, forumInput, idBadge);
   fields.appendChild(topRow);
 
@@ -360,4 +366,6 @@ function renderAuth(){
   const linkRep = el('linkReports'); if (linkRep) linkRep.style.display = (state.role === 'editor' || state.role === 'admin') ? '' : 'none';
   const loginPanel = el('loginPanel'); if (loginPanel) loginPanel.style.display = state.user ? 'none' : loginPanel.style.display;
 }
+
+
 
