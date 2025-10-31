@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import cookie from 'cookie';
 import crypto from 'node:crypto';
 import { findPollingFor } from '../pollingMap.js';
+import db, { getColumns } from '../db.js';
 // Polling station mapping loaded locally if available
 
 const router = express.Router();
