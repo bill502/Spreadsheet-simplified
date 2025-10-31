@@ -1,0 +1,418 @@
+[
+  {
+    "prefix": "",
+    "start": 1,
+    "end": 1500,
+    "location": "Litigation Shed/Hall 1",
+    "floor": "GF",
+    "station": "1"
+  },
+  {
+    "prefix": "",
+    "start": 1501,
+    "end": 3000,
+    "location": "Litigation Shed/Hall 1",
+    "floor": "GF",
+    "station": "2"
+  },
+  {
+    "prefix": "",
+    "start": 3001,
+    "end": 4000,
+    "location": "Litigation Shed/Hall 1",
+    "floor": "GF",
+    "station": "3"
+  },
+  {
+    "prefix": "",
+    "start": 4001,
+    "end": 5000,
+    "location": "Litigation Shed/Hall 1",
+    "floor": "GF",
+    "station": "4"
+  },
+  {
+    "prefix": "",
+    "start": 5001,
+    "end": 6000,
+    "location": "Litigation Shed/Hall Ladies 1",
+    "floor": "GF",
+    "station": "5"
+  },
+  {
+    "prefix": "",
+    "start": 6001,
+    "end": 7000,
+    "location": "Litigation Shed/Hall Ladies 1",
+    "floor": "GF",
+    "station": "6"
+  },
+  {
+    "prefix": "",
+    "start": 7001,
+    "end": 7500,
+    "location": "Litigation Shed/Hall Ladies 1",
+    "floor": "GF",
+    "station": "7"
+  },
+  {
+    "prefix": "",
+    "start": 7501,
+    "end": 8000,
+    "location": "Kiyani Hall 1",
+    "floor": "GF",
+    "station": "8"
+  },
+  {
+    "prefix": "",
+    "start": 8001,
+    "end": 8500,
+    "location": "Kiyani Hall 2",
+    "floor": "GF",
+    "station": "9"
+  },
+  {
+    "prefix": "",
+    "start": 8501,
+    "end": 9000,
+    "location": "Kiyani Hall 3",
+    "floor": "GF",
+    "station": "10"
+  },
+  {
+    "prefix": "",
+    "start": 9001,
+    "end": 9500,
+    "location": "Study Room 1",
+    "floor": "GF",
+    "station": "11"
+  },
+  {
+    "prefix": "",
+    "start": 9501,
+    "end": 10000,
+    "location": "Study Room 2",
+    "floor": "GF",
+    "station": "12"
+  },
+  {
+    "prefix": "",
+    "start": 10001,
+    "end": 10500,
+    "location": "Javaid Iqbal Hall 1",
+    "floor": "GF",
+    "station": "13"
+  },
+  {
+    "prefix": "",
+    "start": 10501,
+    "end": 11000,
+    "location": "Javaid Iqbal Hall 2",
+    "floor": "GF",
+    "station": "14"
+  },
+  {
+    "prefix": "",
+    "start": 11001,
+    "end": 11500,
+    "location": "Javaid Iqbal Hall 3",
+    "floor": "GF",
+    "station": "15"
+  },
+  {
+    "prefix": "",
+    "start": 11501,
+    "end": 12000,
+    "location": "Javaid Iqbal Hall 4",
+    "floor": "GF",
+    "station": "16"
+  },
+  {
+    "prefix": "",
+    "start": 12001,
+    "end": 12500,
+    "location": "Javaid Iqbal Hall 5",
+    "floor": "GF",
+    "station": "17"
+  },
+  {
+    "prefix": "",
+    "start": 12501,
+    "end": 13000,
+    "location": "Javaid Iqbal Hall 6",
+    "floor": "GF",
+    "station": "18"
+  },
+  {
+    "prefix": "",
+    "start": 13001,
+    "end": 13500,
+    "location": "Karachi Shuhada Hall 1",
+    "floor": "GF",
+    "station": "19"
+  },
+  {
+    "prefix": "",
+    "start": 13501,
+    "end": 14000,
+    "location": "Karachi Shuhada Hall 2",
+    "floor": "GF",
+    "station": "20"
+  },
+  {
+    "prefix": "",
+    "start": 14001,
+    "end": 14500,
+    "location": "Karachi Shuhada Hall 3",
+    "floor": "GF",
+    "station": "21"
+  },
+  {
+    "prefix": "",
+    "start": 14501,
+    "end": 15000,
+    "location": "Jinnah Hall Canteen 1",
+    "floor": "GF",
+    "station": "22"
+  },
+  {
+    "prefix": "",
+    "start": 15001,
+    "end": 15500,
+    "location": "Jinnah Hall Canteen 2",
+    "floor": "GF",
+    "station": "23"
+  },
+  {
+    "prefix": "",
+    "start": 15501,
+    "end": 16000,
+    "location": "Justice M Yaqqob Ali Block CR#21",
+    "floor": "FF",
+    "station": "24"
+  },
+  {
+    "prefix": "",
+    "start": 16001,
+    "end": 16500,
+    "location": "Justice M Yaqqob Ali Block CR#22",
+    "floor": "GF",
+    "station": "25"
+  },
+  {
+    "prefix": "",
+    "start": 16501,
+    "end": 17000,
+    "location": "Justice M Yaqqob Ali Block CR#23",
+    "floor": "GF",
+    "station": "26"
+  },
+  {
+    "prefix": "",
+    "start": 17001,
+    "end": 17500,
+    "location": "Justice M Yaqqob Ali Block CR#24",
+    "floor": "GF",
+    "station": "27"
+  },
+  {
+    "prefix": "",
+    "start": 17501,
+    "end": 18500,
+    "location": "Justice M Yaqqob Ali Block CR#25",
+    "floor": "GF",
+    "station": "28"
+  },
+  {
+    "prefix": "",
+    "start": 18501,
+    "end": 19000,
+    "location": "Justice M Yaqqob Ali Block CR#26",
+    "floor": "FF",
+    "station": "29"
+  },
+  {
+    "prefix": "",
+    "start": 19001,
+    "end": 19500,
+    "location": "Justice M Yaqqob Ali Block CR#27",
+    "floor": "FF",
+    "station": "30"
+  },
+  {
+    "prefix": "",
+    "start": 19501,
+    "end": 20000,
+    "location": "Justice M Yaqqob Ali Block CR#28",
+    "floor": "FF",
+    "station": "31"
+  },
+  {
+    "prefix": "",
+    "start": 20001,
+    "end": 20500,
+    "location": "Justice SA Rehman Block CR# 31",
+    "floor": "GF",
+    "station": "32"
+  },
+  {
+    "prefix": "",
+    "start": 20501,
+    "end": 21000,
+    "location": "Justice SA Rehman Block CR# 32",
+    "floor": "GF",
+    "station": "33"
+  },
+  {
+    "prefix": "",
+    "start": 21001,
+    "end": 21500,
+    "location": "Justice SA Rehman Block CR# 39",
+    "floor": "GF",
+    "station": "34"
+  },
+  {
+    "prefix": "",
+    "start": 21501,
+    "end": 22000,
+    "location": "Justice SA Rehman Block CR# 41",
+    "floor": "FF",
+    "station": "35"
+  },
+  {
+    "prefix": "",
+    "start": 22001,
+    "end": 22500,
+    "location": "Justice SA Rehman Block CR# 42",
+    "floor": "FF",
+    "station": "36"
+  },
+  {
+    "prefix": "",
+    "start": 22501,
+    "end": 23000,
+    "location": "Justice AS Salam Block CR#29",
+    "floor": "GF",
+    "station": "37"
+  },
+  {
+    "prefix": "",
+    "start": 23001,
+    "end": 23500,
+    "location": "Justice AS Salam Block CR#30",
+    "floor": "GF",
+    "station": "38"
+  },
+  {
+    "prefix": "",
+    "start": 23501,
+    "end": 23881,
+    "location": "Justice AS Salam Block CR#33",
+    "floor": "FF",
+    "station": "39"
+  },
+  {
+    "prefix": "",
+    "start": 1,
+    "end": 1500,
+    "location": "Justice AS Salam Block CR#40",
+    "floor": "GF",
+    "station": "40"
+  },
+  {
+    "prefix": "",
+    "start": 1501,
+    "end": 2000,
+    "location": "Justice Cornelius Block CR#13",
+    "floor": "GF",
+    "station": "41"
+  },
+  {
+    "prefix": "",
+    "start": 2001,
+    "end": 2500,
+    "location": "Justice Cornelius Block CR#14",
+    "floor": "GF",
+    "station": "42"
+  },
+  {
+    "prefix": "",
+    "start": 2501,
+    "end": 3000,
+    "location": "Justice Cornelius Block CR#15",
+    "floor": "GF",
+    "station": "43"
+  },
+  {
+    "prefix": "",
+    "start": 3001,
+    "end": 3500,
+    "location": "Justice Cornelius Block CR#16",
+    "floor": "GF",
+    "station": "44"
+  },
+  {
+    "prefix": "",
+    "start": 3501,
+    "end": 4000,
+    "location": "Justice Cornelius Block CR#17",
+    "floor": "FF",
+    "station": "45"
+  },
+  {
+    "prefix": "",
+    "start": 4001,
+    "end": 4500,
+    "location": "Justice Cornelius Block CR#18",
+    "floor": "FF",
+    "station": "46"
+  },
+  {
+    "prefix": "",
+    "start": 4501,
+    "end": 5000,
+    "location": "Justice Cornelius Block CR#19",
+    "floor": "FF",
+    "station": "47"
+  },
+  {
+    "prefix": "",
+    "start": 5001,
+    "end": 5500,
+    "location": "Justice Cornelius Block CR#20",
+    "floor": "FF",
+    "station": "48"
+  },
+  {
+    "prefix": "",
+    "start": 5501,
+    "end": 6000,
+    "location": "Justice Cornelius Block CR#35",
+    "floor": "Basement",
+    "station": "49"
+  },
+  {
+    "prefix": "",
+    "start": 6001,
+    "end": 6500,
+    "location": "Justice Cornelius Block CR#36",
+    "floor": "Basement",
+    "station": "50"
+  },
+  {
+    "prefix": "",
+    "start": 6501,
+    "end": 7000,
+    "location": "Justice Cornelius Block CR#37",
+    "floor": "Basement",
+    "station": "51"
+  },
+  {
+    "prefix": "",
+    "start": 7001,
+    "end": 7581,
+    "location": "Justice Cornelius Block CR#38",
+    "floor": "Basement",
+    "station": "52"
+  }
+]
